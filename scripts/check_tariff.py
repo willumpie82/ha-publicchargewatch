@@ -5,7 +5,7 @@ from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
     "tariff",
-    Path(__file__).parent.parent / "custom_components/public_charge_watch/tariff.py",
+    Path(__file__).parent.parent / "custom_components/public_charge_watch/providers/ocm_tariff.py",
 )
 tariff = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tariff)

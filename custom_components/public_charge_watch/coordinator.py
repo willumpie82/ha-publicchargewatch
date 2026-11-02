@@ -29,8 +29,8 @@ from .const import (
     CONF_LOCATION_IDS,
     SUBENTRY_LOCATION,
 )
-from .dynamic import pick
-from .provider import Provider, ProviderAuthError, ProviderError
+from .dynamic_location import pick
+from .providers.base import Provider, ProviderAuthError, ProviderError
 
 _LOGGER = logging.getLogger(__name__)
 

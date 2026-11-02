@@ -25,8 +25,10 @@ pkg_dir = Path(__file__).parent.parent / "custom_components/public_charge_watch"
 pkg = types.ModuleType("ndw_pkg")
 pkg.__path__ = [str(pkg_dir)]
 sys.modules["ndw_pkg"] = pkg
-parser = importlib.import_module("ndw_pkg.parser")
-ndw_tariff = importlib.import_module("ndw_pkg.ndw_tariff")
+sys.modules["ndw_pkg.providers"] = providers = types.ModuleType("ndw_pkg.providers")
+providers.__path__ = [str(pkg_dir / "providers")]
+parser = importlib.import_module("ndw_pkg.providers.ndw_geojson")
+ndw_tariff = importlib.import_module("ndw_pkg.providers.ndw_tariffs")
 
 lat, lon, radius = 51.69427, 5.27172, 150
 if len(sys.argv) >= 3:

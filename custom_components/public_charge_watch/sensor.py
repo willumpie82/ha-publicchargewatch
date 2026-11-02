@@ -15,7 +15,7 @@ from . import NdwConfigEntry
 from .const import EVSE_STATUSES
 from .coordinator import DynamicCoordinator, NdwCoordinator, iter_locations
 from .entity import DynamicEntity, NdwEvseEntity, NdwLocationEntity
-from .parser import group_label
+from .providers.ndw_geojson import group_label
 
 
 async def async_setup_entry(

@@ -19,15 +19,16 @@ from urllib.parse import parse_qs, urlsplit
 
 import aiohttp
 
-from .api import NdwTariffs, _attach_price
-from .const import (
+from ..const import (
     DOTNL_LOCATION_RADIUS_M,
     DOTNL_MAX_BBOX_DEG2,
     DOTNL_REQUEST_GAP,
     DOTNL_URL,
 )
-from .parser import distance_m, slim_feature
-from .provider import Provider, ProviderError, ProviderRateLimitError
+from ..geo import distance_m
+from .base import Provider, ProviderError, ProviderRateLimitError
+from .ndw_geojson import slim_feature
+from .ndw_shared import NdwTariffs, attach_price
 
 _LOGGER = logging.getLogger(__name__)
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
@@ -153,7 +154,7 @@ class NdwApi(Provider):
         ids = {t for loc in locations for g in loc["groups"] for t in g["tariff_ids"]}
         tariffs = await self._tariffs.async_get_tariffs(ids, lazy=True)
         for loc in locations:
-            _attach_price(loc, tariffs)
+            attach_price(loc, tariffs)
         return locations
 
     async def async_get_locations(
@@ -185,5 +186,5 @@ class NdwApi(Provider):
         }
         tariffs = await self._tariffs.async_get_tariffs(tariff_ids)
         for loc in found.values():
-            _attach_price(loc, tariffs)
+            attach_price(loc, tariffs)
         return found

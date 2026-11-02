@@ -22,7 +22,9 @@ pkg_dir = Path(__file__).parent.parent / "custom_components/public_charge_watch"
 pkg = types.ModuleType("ndw_pkg")
 pkg.__path__ = [str(pkg_dir)]
 sys.modules["ndw_pkg"] = pkg
-ocm = importlib.import_module("ndw_pkg.ocm")
+sys.modules["ndw_pkg.providers"] = providers = types.ModuleType("ndw_pkg.providers")
+providers.__path__ = [str(pkg_dir / "providers")]
+ocm = importlib.import_module("ndw_pkg.providers.ocm")
 
 lat, lon, radius = 51.69427, 5.27172, 150
 if len(sys.argv) >= 3:

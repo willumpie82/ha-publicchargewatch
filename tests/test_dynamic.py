@@ -4,7 +4,7 @@ from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.public_charge_watch.const import DOMAIN
-from custom_components.public_charge_watch.dynamic import pick
+from custom_components.public_charge_watch.dynamic_location import pick
 
 from .conftest import HOME_LAT, HOME_LON
 from .test_flows import _add_ndw_location, _configure_sub, _entity, _update_feed

@@ -13,7 +13,6 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .api import NdwFeed, NdwTariffs
 from .const import (
     CONF_API_KEY,
     CONF_COORDS,
@@ -26,10 +25,12 @@ from .const import (
     SOURCE_OCM,
 )
 from .coordinator import DynamicCoordinator, NdwCoordinator, position_of
-from .ndw_api import NdwApi
-from .ocm import OcmClient
-from .parser import distance_m
-from .provider import Provider
+from .geo import distance_m
+from .providers.base import Provider
+from .providers.ndw_api import NdwApi
+from .providers.ndw_download import NdwFeed
+from .providers.ndw_shared import NdwTariffs
+from .providers.ocm import OcmClient
 
 PLATFORMS = [
     Platform.SENSOR,

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .parser import distance_m
-from .provider import Provider, ProviderAuthError
-from .tariff import parse_usage_cost
+from ..geo import distance_m
+from .base import Provider, ProviderAuthError
+from .ocm_tariff import parse_usage_cost
 
 if TYPE_CHECKING:
     import aiohttp

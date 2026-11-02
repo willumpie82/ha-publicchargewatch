@@ -8,7 +8,7 @@ import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMockResponse
 
 from custom_components.public_charge_watch.const import FEED_URL, TARIFF_URL
-from custom_components.public_charge_watch.geocode import PDOK_URL
+from custom_components.public_charge_watch.geocoding import PDOK_URL
 
 # zone.home in the test hass instance
 HOME_LAT, HOME_LON = 32.87336, -117.22743
@@ -173,7 +173,7 @@ def mock_ndw_api(mock_ndw):
 
 @pytest.fixture
 def mock_ocm(aioclient_mock):
-    from custom_components.public_charge_watch.ocm import OCM_URL
+    from custom_components.public_charge_watch.providers.ocm import OCM_URL
 
     aioclient_mock.get(OCM_URL, json=[OCM_POI])
     return aioclient_mock

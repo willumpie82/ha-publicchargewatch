@@ -14,7 +14,7 @@ import aiohttp
 pkg = types.ModuleType("ndw_pkg")
 pkg.__path__ = [str(Path(__file__).parent.parent / "custom_components/public_charge_watch")]
 sys.modules["ndw_pkg"] = pkg
-geo = importlib.import_module("ndw_pkg.geocode")
+geo = importlib.import_module("ndw_pkg.geocoding")
 
 assert geo.normalize_postcode("5223 hs") == "5223HS"
 assert geo.normalize_postcode(" 5223HS ") == "5223HS"

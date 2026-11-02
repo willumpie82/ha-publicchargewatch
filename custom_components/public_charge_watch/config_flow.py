@@ -52,6 +52,7 @@ from homeassistant.helpers.selector import (
 
 from . import NdwConfigEntry, get_client
 from .const import (
+    CONNECTOR_NAMES,
     CONF_API_KEY,
     CONF_CONNECTORS,
     CONF_HOUSE_NUMBER,
@@ -81,10 +82,9 @@ from .const import (
     SUBENTRY_DYNAMIC,
     SUBENTRY_LOCATION,
 )
-from .geocode import async_geocode_postcode, async_reverse_city, normalize_postcode
-from .provider import ProviderAuthError
+from .geocoding import async_geocode_postcode, async_reverse_city, normalize_postcode
 from .providers import PROVIDERS
-from .parser import CONNECTOR_NAMES
+from .providers.base import ProviderAuthError
 
 _NETWORK_ERRORS = (aiohttp.ClientError, TimeoutError)
 

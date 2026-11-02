@@ -5,8 +5,8 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.public_charge_watch.const import DOMAIN, TARIFF_URL
-from custom_components.public_charge_watch.geocode import PDOK_URL
-from custom_components.public_charge_watch.ocm import OCM_URL
+from custom_components.public_charge_watch.geocoding import PDOK_URL
+from custom_components.public_charge_watch.providers.ocm import OCM_URL
 
 from .conftest import HOME_LAT, HOME_LON, NDW_FEED, _gz
 from custom_components.public_charge_watch.const import FEED_URL
@@ -279,10 +279,10 @@ async def test_refresh_button_forces_a_new_check(hass, mock_ndw):
 async def test_entries_share_one_download(hass, mock_ndw):
     from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-    from custom_components.public_charge_watch.api import NdwFeed
+    from custom_components.public_charge_watch.providers.ndw_download import NdwFeed
     from custom_components.public_charge_watch.const import FEED_URL
 
-    from custom_components.public_charge_watch.api import NdwTariffs
+    from custom_components.public_charge_watch.providers.ndw_shared import NdwTariffs
 
     session = async_get_clientsession(hass)
     feed = NdwFeed(hass, session, NdwTariffs(hass, session))

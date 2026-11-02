@@ -10,33 +10,13 @@ from collections.abc import Callable
 import gzip
 import io
 import json
-import math
 import re
 from typing import Any
 
 import ijson
 
-EARTH_RADIUS_M = 6_371_000
-
-CONNECTOR_NAMES = {
-    "IEC_62196_T1": "Type 1",
-    "IEC_62196_T1_COMBO": "CCS1",
-    "IEC_62196_T2": "Type 2",
-    "IEC_62196_T2_COMBO": "CCS",
-    "CHADEMO": "CHAdeMO",
-    "DOMESTIC_F": "Schuko",
-    "TESLA_S": "Tesla",
-}
-
-
-def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance in metres."""
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = p2 - p1
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * EARTH_RADIUS_M * math.asin(math.sqrt(a))
-
+from ..const import CONNECTOR_NAMES
+from ..geo import distance_m
 
 def group_label(group: dict[str, Any]) -> str:
     """'Type 2 · 11 kW' style label for a connector group."""

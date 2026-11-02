@@ -4,10 +4,10 @@ import pytest
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from custom_components.public_charge_watch.api import NdwTariffs
+from custom_components.public_charge_watch.providers.ndw_shared import NdwTariffs
 from custom_components.public_charge_watch.const import FEED_URL
-from custom_components.public_charge_watch.ndw_api import NdwApi, bounding_box
-from custom_components.public_charge_watch.provider import ProviderError
+from custom_components.public_charge_watch.providers.ndw_api import NdwApi, bounding_box
+from custom_components.public_charge_watch.providers.base import ProviderError
 
 from .conftest import HOME_LAT, HOME_LON
 from .test_flows import _add_ndw_location, _entity, _update_feed

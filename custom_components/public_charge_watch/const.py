@@ -66,3 +66,14 @@ DOTNL_MAX_BBOX_DEG2 = 1.0  # the API refuses larger areas
 DOTNL_REQUEST_GAP = 0.11  # seconds between requests (the API is rate limited)
 DOTNL_LOCATION_RADIUS_M = 150  # area asked for around a known location
 CONF_COORDS = "coordinates"  # {location_id: [latitude, longitude]} stored in a place
+
+# OCPI connector types (as NDW reports them) -> display names
+CONNECTOR_NAMES = {
+    "IEC_62196_T1": "Type 1",
+    "IEC_62196_T1_COMBO": "CCS1",
+    "IEC_62196_T2": "Type 2",
+    "IEC_62196_T2_COMBO": "CCS",
+    "CHADEMO": "CHAdeMO",
+    "DOMESTIC_F": "Schuko",
+    "TESLA_S": "Tesla",
+}

@@ -14,13 +14,12 @@ is missing from the data.
 
 | File | Role |
 |---|---|
-| `provider.py`, `providers.py` | the interface every source implements (`Provider`: `async_nearby`, `async_get_locations`, capability flags like `live_occupancy`, `bulk_download`, `scan_interval`), its errors, and the registry of providers by id. `NdwFeed` (`api.py`) and `OcmClient` (`ocm.py`) are the two providers; new sources subclass `Provider` and are added to `PROVIDERS`. Code must ask a provider for a capability, never compare source names |
-| `parser.py`, `ndw_tariff.py`, `tariff.py`, `ocm.py`, `geocode.py` | Home-Assistant-free logic (also used by `scripts/`) |
-| `api.py` | `NdwFeed`: shared NDW download (raw feed kept in memory, ETag, lock) + daily tariff download persisted in a `Store` |
+| `providers/` | one module per data source, prefixed with its source. `base.py`: the `Provider` interface (`async_nearby`, `async_get_locations`, capability flags like `live_occupancy`, `bulk_download`, `scan_interval`) and its errors; `__init__.py`: the `PROVIDERS` registry by id. NDW: `ndw_download.py` (`NdwFeed`, the bulk file: raw feed in memory, ETag, lock), `ndw_api.py` (`NdwApi`, bounding-box API), `ndw_shared.py` (download helper, `NdwTariffs` daily tariff store, price attachment), `ndw_geojson.py` and `ndw_tariffs.py` (Home-Assistant-free parsers). OCM: `ocm.py` (`OcmClient`) and `ocm_tariff.py` (price text parser). New sources subclass `Provider` and are added to `PROVIDERS`. Code must ask a provider for a capability, never compare source names |
+| `geo.py`, `geocoding.py`, `dynamic_location.py` | `geo.py`: distance; `geocoding.py`: PDOK postcode / town lookups; `dynamic_location.py`: `pick()` for the dynamic location |
 | `coordinator.py` | polling, `iter_locations(entry)`, force refresh, `last_success` |
 | `config_flow.py` | `_LocationSearch` mixin (search steps) shared by `NdwConfigFlow` and `LocationSubentryFlow`; options flow = update interval |
 | `sensor.py` `binary_sensor.py` `button.py` `entity.py` | entities, created from the data a location actually has |
-| `dynamic.py`, `DynamicCoordinator` | dynamic charging location (subentry type `dynamic`, NDW only): `pick()` ranks nearby chargers by plug / power / free; the coordinator follows a tracked entity (state listener in `__init__.py`, recompute after ~150 m); sensor, `device_tracker` and event entities live on its own device (`dynamic_<subentry_id>`) |
+| `DynamicCoordinator` (`coordinator.py`) | dynamic charging location (subentry type `dynamic`, NDW only): `pick()` ranks nearby chargers by plug / power / free; the coordinator follows a tracked entity (state listener in `__init__.py`, recompute after ~150 m); sensor, `device_tracker` and event entities live on its own device (`dynamic_<subentry_id>`) |
 
 ## Data sources (the non-obvious parts)
 - **NDW** (NL only, live availability per connector group, exact tariffs): GeoJSON
@@ -30,14 +29,14 @@ is missing from the data.
   whole feed (~1.4 GB/day at 5 min): all entries share one download (`max_age` = 80% of the
   interval), HTTP 304 when unchanged. Tariffs: at most once a day.
 - **Open Charge Map**: API key (header `X-API-Key`), no live occupancy (status 50 = "last editor
-  said it works", not "free"). Prices are free text; `tariff.py` parses them conservatively
+  said it works", not "free"). Prices are free text; `providers/ocm_tariff.py` parses them conservatively
   ("0.00 jaarabonnement" is an import placeholder = unknown, never free).
 - **PDOK Locatieserver** (no key): postcode → point (`free`, must verify the returned postcode
   because matching is fuzzy) and point → town (`reverse`, NDW has no city).
 - Not everything exists: private/semi-public chargers (e.g. company sites) are in neither NDW nor
   OCM. That is a data limit, not a bug.
 
-## NDW DOT-NL bounding-box API (`ndw_api.py`, provider `ndw_api`)
+## NDW DOT-NL bounding-box API (`providers/ndw_api.py`, provider `ndw_api`)
 `https://dotnl.ndw.nu/api/rest/geojson/dynamic-road-status/charge-point-data/v1/features?bbox=w,s,e,n`
 returns the same features as the bulk file for one area (no key; max 1 square degree; ~9 requests/s).
 Things found by testing it live: there is **no lookup by id** (so places store `coordinates` per
@@ -48,10 +47,10 @@ usable, on the normal endpoint; multi-page answers come up a few locations short
 `ProviderRateLimitError`. Tariffs are shared with the bulk provider (`NdwTariffs`, one daily download).
 
 ## Performance rule: never build objects for the whole feed
-`parser.scan` and `ndw_tariff.scan_tariffs` first match each feature/tariff start with a regex
+`ndw_geojson.scan` and `ndw_tariffs.scan_tariffs` first match each feature/tariff start with a regex
 and only `json.loads` the wanted ones (30–80× faster than streaming with `ijson`: 0.2 s vs 6–13 s
 for a search). Both fall back to `ijson` when the layout changes; keep that fallback and its tests
-(`tests/test_parser.py`) if you touch them. `NdwFeed` caches parsed locations and reparses only when
+(`tests/test_ndw_geojson.py`) if you touch them. `NdwFeed` caches parsed locations and reparses only when
 the feed changed or a new id was requested.
 
 ## Home Assistant gotchas hit so far
@@ -75,7 +74,7 @@ uv pip install --python .venv/bin/python pytest-homeassistant-custom-component i
 ```
 `tests/conftest.py` holds small synthetic NDW/OCM payloads; the NDW test feed must keep the real
 layout (`{"id":…,"type":"Feature","geometry":…`) for the fast parser path to be exercised
-(`test_parser.py` checks both paths). `scripts/check_*.py` verify against the live services
+(`test_ndw_geojson.py` checks both paths). `scripts/check_*.py` verify against the live services
 (`OCM_API_KEY=… python scripts/check_ocm.py`); `scripts/make_icon.py` regenerates `brand/`.
 
 ## Style

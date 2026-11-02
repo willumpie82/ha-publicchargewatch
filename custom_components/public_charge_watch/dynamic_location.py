@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .parser import CONNECTOR_NAMES
+from .const import CONNECTOR_NAMES
 
 
 def navigate_url(latitude: float, longitude: float) -> str:
