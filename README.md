@@ -56,4 +56,3 @@ python scripts/check_geocode.py          # PDOK postcode lookup
 python scripts/check_tariff.py           # OCM price text parser, offline
 OCM_API_KEY=... python scripts/check_ocm.py
 ```
-Replace `CHANGE_ME` in `manifest.json` with your GitHub user before publishing.
