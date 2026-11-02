@@ -1,15 +1,17 @@
 [Setup](setup.md) · [Entities](entities.md) · [Dynamic charging location](dynamic.md) · [Examples](examples.md) · [Development](development.md)
 
 # Examples
-Entity ids follow the names you chose; replace `car` and `willem` below with your own. Find them
-under Settings → Devices & services → PublicChargeWatch.
+Entity ids are the device name plus the entity name, so they depend on the name you gave the
+dynamic location (default "Nearest charger") and on your Home Assistant language: with Dutch
+names the sensor is `sensor.nearest_charger_dichtstbijzijnde_laadpaal`. The examples use the English
+defaults; copy your own ids from Settings → Devices & services → PublicChargeWatch.
 
 **Map card**: the followed entity and the charger it is heading for:
 ```yaml
 type: map
 entities:
   - entity: person.willem
-  - entity: device_tracker.car_nearest_charger   # the nearest-charger tracker
+  - entity: device_tracker.nearest_charger_nearest_charger   # the nearest-charger tracker
 hours_to_show: 0
 ```
 
@@ -17,23 +19,30 @@ hours_to_show: 0
 ```yaml
 type: entities
 entities:
-  - sensor.car_nearest_charger            # address
-  - sensor.car_distance
-  - sensor.car_free_charge_points         # attribute free_of_total, e.g. 1/3
-  - sensor.car_power
-  - sensor.car_plug_type
+  - sensor.nearest_charger_nearest_charger            # address
+  - sensor.nearest_charger_distance
+  - sensor.nearest_charger_free_charge_points         # attribute free_of_total, e.g. 1/3
+  - sensor.nearest_charger_power
+  - sensor.nearest_charger_plug_type
 ```
 
-**Markdown card** listing the top 3 (from the `results` attribute):
+**Markdown card** listing the top 3 (from the `results` attribute). In the card editor paste the
+content below **without any leading spaces** (the editor keeps them and the list turns into
+nested bullets):
+```
+{% for r in state_attr('sensor.nearest_charger_nearest_charger', 'results') or [] %}
+- **{{ r.address }}**: {{ r.distance_m }} m, {{ r.free }}/{{ r.total }} free, {{ r.power_kw }} kW{% if r.price_per_kwh is not none %}, €{{ r.price_per_kwh }}/kWh{% endif %} · [Navigate]({{ r.navigate_url }})
+{%- endfor %}
+```
+In YAML mode the same text goes under `content: |`, indented as a block:
 ```yaml
 type: markdown
-content: >-
-  {% for r in state_attr('sensor.car_nearest_charger', 'results') %}
-  **{{ r.address }}**: {{ r.distance_m }} m, {{ r.free }}/{{ r.total }} free,
-  {{ r.power_kw }} kW, {{ r.price_per_kwh | default('?', true) }} €/kWh
-  [Navigate]({{ r.navigate_url }})
-  {% endfor %}
+content: |
+  {% for r in state_attr('sensor.nearest_charger_nearest_charger', 'results') or [] %}
+  - **{{ r.address }}**: {{ r.distance_m }} m, {{ r.free }}/{{ r.total }} free, {{ r.power_kw }} kW
+  {%- endfor %}
 ```
+Use `|`, not `>-`: the line breaks are what make it a list.
 
 **Automation**: when a better charger with a free charge point becomes the nearest, notify the
 phone with a button that starts navigation. Only while "I need to charge" is on:
@@ -41,7 +50,7 @@ phone with a button that starts navigation. Only while "I need to charge" is on:
 alias: Tell me where I can charge
 triggers:
   - trigger: state
-    entity_id: event.car_nearest_charger
+    entity_id: event.nearest_charger_nearest_charger
 conditions:
   - condition: state
     entity_id: input_boolean.need_charge
@@ -86,6 +95,6 @@ template:
   - binary_sensor:
       - name: Cheap charger nearby
         state: >-
-          {% set p = state_attr('sensor.car_nearest_charger', 'price_per_kwh') %}
-          {{ p is not none and p < 0.40 and states('sensor.car_free_charge_points') | int(0) > 0 }}
+          {% set p = state_attr('sensor.nearest_charger_nearest_charger', 'price_per_kwh') %}
+          {{ p is not none and p < 0.40 and states('sensor.nearest_charger_free_charge_points') | int(0) > 0 }}
 ```
