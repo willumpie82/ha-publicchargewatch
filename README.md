@@ -18,8 +18,15 @@ version, and existing installations keep using it).
 The old oplaadpalen.nl API is gone (`410 Gone`).
 
 ## Install
-HACS → Custom repositories → add this repo (type: Integration) → install → restart HA.
-Settings → Devices & services → Add integration → "PublicChargeWatch".
+[![Open your Home Assistant instance and open this repository in the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=willumpie82&repository=ha-publicchargewatch&category=integration)
+
+PublicChargeWatch is not in the HACS default store (yet), so it is added as a custom repository:
+use the badge above (it opens HACS in your Home Assistant and offers to add the repository), or do
+it by hand: HACS → ⋮ → Custom repositories → add `willumpie82/ha-publicchargewatch` (type:
+Integration).
+
+Then download it, restart Home Assistant and add it from Settings → Devices & services → Add
+integration → "PublicChargeWatch".
 
 ## Documentation
 - **[Setup](docs/setup.md)**: sources, places and charging locations, and the setup flow.
