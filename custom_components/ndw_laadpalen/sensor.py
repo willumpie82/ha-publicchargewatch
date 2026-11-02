@@ -12,8 +12,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import NdwConfigEntry
-from .const import CONF_LOCATION_ID, EVSE_STATUSES
-from .coordinator import NdwCoordinator
+from .const import EVSE_STATUSES
+from .coordinator import NdwCoordinator, iter_locations
 from .entity import NdwEvseEntity, NdwLocationEntity
 from .parser import group_label
 
@@ -22,14 +22,8 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: NdwConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
-    for subentry in entry.subentries.values():
-        _setup_location(
-            entry,
-            coordinator,
-            subentry.data[CONF_LOCATION_ID],
-            subentry.subentry_id,
-            async_add_entities,
-        )
+    for subentry_id, location_id in iter_locations(entry):
+        _setup_location(entry, coordinator, location_id, subentry_id, async_add_entities)
 
 
 def _setup_location(

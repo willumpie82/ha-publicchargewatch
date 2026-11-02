@@ -6,6 +6,7 @@ import json
 import pytest
 
 from custom_components.ndw_laadpalen.const import FEED_URL, TARIFF_URL
+from custom_components.ndw_laadpalen.geocode import PDOK_URL
 
 # zone.home in the test hass instance
 HOME_LAT, HOME_LON = 32.87336, -117.22743
@@ -76,7 +77,7 @@ NDW_TARIFFS = [
 OCM_POI = {
     "ID": 473176,
     "AddressInfo": {
-        "AddressLine1": "Jacob Cnodestraat", "Postcode": "5223 HT",
+        "AddressLine1": "Jacob Cnodestraat", "Postcode": "5223 HT", "Town": "Teststad",
         "Latitude": HOME_LAT, "Longitude": HOME_LON,
     },
     "OperatorInfo": {"Title": "Vattenfall InCharge"},
@@ -92,11 +93,29 @@ OCM_POI = {
 }
 
 
+CITY = {"name": "Teststad"}
+
+
+def mock_city(aioclient_mock, city="Teststad"):
+    """PDOK reverse geocoding: every point is in CITY['name'] (change it mid-test)."""
+    from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMockResponse
+
+    CITY["name"] = city
+
+    async def reverse(method, url, data):
+        return AiohttpClientMockResponse(
+            method, url, json={"response": {"docs": [{"woonplaatsnaam": CITY["name"]}]}}
+        )
+
+    aioclient_mock.get(PDOK_URL.replace("/free", "/reverse"), side_effect=reverse)
+
+
 @pytest.fixture
 def mock_ndw(aioclient_mock):
     headers = {"ETag": '"v1"'}
     aioclient_mock.get(FEED_URL, content=_gz(NDW_FEED), headers=headers)
     aioclient_mock.get(TARIFF_URL, content=_gz(NDW_TARIFFS), headers=headers)
+    mock_city(aioclient_mock, "Teststad")
     return aioclient_mock
 
 

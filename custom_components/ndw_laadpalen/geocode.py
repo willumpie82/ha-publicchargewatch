@@ -61,3 +61,25 @@ async def async_geocode_postcode(
         ):
             return point
     return await _lookup(session, code, "postcode", code)
+
+
+async def async_reverse_city(
+    session: aiohttp.ClientSession, latitude: float, longitude: float
+) -> str | None:
+    """Name of the town at a point (the NDW feed has no city), or None."""
+    import aiohttp
+
+    async with session.get(
+        PDOK_URL.replace("/free", "/reverse"),
+        params={
+            "lat": latitude,
+            "lon": longitude,
+            "type": "woonplaats",
+            "rows": 1,
+            "fl": "woonplaatsnaam",
+        },
+        timeout=aiohttp.ClientTimeout(total=20),
+    ) as resp:
+        resp.raise_for_status()
+        docs = (await resp.json(content_type=None))["response"]["docs"]
+    return docs[0].get("woonplaatsnaam") if docs else None

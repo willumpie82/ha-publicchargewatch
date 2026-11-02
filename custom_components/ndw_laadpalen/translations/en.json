@@ -176,7 +176,7 @@
       "initiate_flow": {
         "user": "Add charging location"
       },
-      "entry_type": "Charging location",
+      "entry_type": "Place",
       "step": {
         "location_method": {
           "title": "Where to search?",
@@ -236,7 +236,8 @@
       },
       "abort": {
         "already_configured": "This location is already added.",
-        "cannot_connect": "Could not fetch the NDW data."
+        "cannot_connect": "Could not fetch the NDW data.",
+        "location_added": "{place} already existed: the charging location was added to it."
       }
     }
   }

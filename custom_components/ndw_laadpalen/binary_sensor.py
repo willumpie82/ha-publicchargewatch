@@ -7,8 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import NdwConfigEntry
-from .const import CONF_LOCATION_ID
-from .coordinator import NdwCoordinator
+from .coordinator import NdwCoordinator, iter_locations
 from .entity import NdwLocationEntity
 
 
@@ -18,12 +17,11 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     if not coordinator.live_occupancy:
         return
-    for subentry in entry.subentries.values():
-        location_id = subentry.data[CONF_LOCATION_ID]
+    for subentry_id, location_id in iter_locations(entry):
         if location_id in coordinator.data:
             async_add_entities(
                 [NdwAnyAvailableBinarySensor(coordinator, location_id)],
-                config_subentry_id=subentry.subentry_id,
+                config_subentry_id=subentry_id,
             )
 
 

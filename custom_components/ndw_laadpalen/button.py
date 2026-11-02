@@ -8,8 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import NdwConfigEntry
-from .const import CONF_LOCATION_ID
-from .coordinator import NdwCoordinator
+from .coordinator import NdwCoordinator, iter_locations
 from .entity import NdwLocationEntity
 
 
@@ -17,12 +16,11 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: NdwConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
-    for subentry in entry.subentries.values():
-        location_id = subentry.data[CONF_LOCATION_ID]
+    for subentry_id, location_id in iter_locations(entry):
         if location_id in coordinator.data:
             async_add_entities(
                 [NdwRefreshButton(coordinator, location_id)],
-                config_subentry_id=subentry.subentry_id,
+                config_subentry_id=subentry_id,
             )
 
 

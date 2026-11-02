@@ -42,4 +42,6 @@ EVSE_STATUSES = [
     "unknown",
 ]
 
-SUBENTRY_LOCATION = "location"
+SUBENTRY_LOCATION = "location"  # one subentry per place (city)
+CONF_CITY = "city"
+CONF_LOCATION_IDS = "location_ids"

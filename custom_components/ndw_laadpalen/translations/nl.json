@@ -176,7 +176,7 @@
       "initiate_flow": {
         "user": "Laadlocatie toevoegen"
       },
-      "entry_type": "Laadlocatie",
+      "entry_type": "Plaats",
       "step": {
         "location_method": {
           "title": "Waar zoeken?",
@@ -236,7 +236,8 @@
       },
       "abort": {
         "already_configured": "Deze laadlocatie is al toegevoegd.",
-        "cannot_connect": "Kan de NDW-gegevens niet ophalen."
+        "cannot_connect": "Kan de NDW-gegevens niet ophalen.",
+        "location_added": "{place} bestond al: de laadlocatie is daaraan toegevoegd."
       }
     }
   }

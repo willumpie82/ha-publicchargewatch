@@ -22,7 +22,7 @@ class NdwLocationEntity(CoordinatorEntity[NdwCoordinator]):
         loc = coordinator.data[location_id]
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, location_id)},
-            name=", ".join(p for p in (loc["address"], loc["city"]) if p),
+            name=loc["address"] or location_id,  # the place is the subentry above it
             manufacturer=loc.get("operator"),
             model="Charging location",
         )

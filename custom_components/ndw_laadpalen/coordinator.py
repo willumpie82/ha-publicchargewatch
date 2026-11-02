@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime, timedelta
 import logging
 from typing import Any
@@ -16,17 +17,26 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import NdwFeed
 from .const import (
-    CONF_LOCATION_ID,
-    SUBENTRY_LOCATION,
     CONF_SCAN_INTERVAL,
     CONF_SOURCE,
     DOMAIN,
+    CONF_LOCATION_IDS,
     SCAN_INTERVALS,
+    SUBENTRY_LOCATION,
     SOURCE_NDW,
 )
 from .ocm import OcmAuthError, OcmClient
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def iter_locations(entry: ConfigEntry) -> Iterator[tuple[str, str]]:
+    """(subentry_id, location_id) for every charging location of the entry."""
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type == SUBENTRY_LOCATION:
+            for location_id in subentry.data[CONF_LOCATION_IDS]:
+                yield subentry.subentry_id, location_id
+
 
 
 class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
@@ -54,11 +64,7 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     @property
     def location_ids(self) -> set[str]:
-        return {
-            sub.data[CONF_LOCATION_ID]
-            for sub in self.config_entry.subentries.values()
-            if sub.subentry_type == SUBENTRY_LOCATION
-        }
+        return {i for _, i in iter_locations(self.config_entry)}
 
     @property
     def live_occupancy(self) -> bool:

@@ -52,7 +52,9 @@ from .const import (
     CONF_API_KEY,
     CONF_HOUSE_NUMBER,
     CONF_LOCATION,
+    CONF_CITY,
     CONF_LOCATION_ID,
+    CONF_LOCATION_IDS,
     CONF_POSTCODE,
     CONF_RADIUS,
     CONF_SCAN_INTERVAL,
@@ -67,10 +69,18 @@ from .const import (
     SOURCE_OCM,
     SUBENTRY_LOCATION,
 )
-from .geocode import async_geocode_postcode, normalize_postcode
+from .geocode import async_geocode_postcode, async_reverse_city, normalize_postcode
 from .ocm import OcmAuthError
 
 _NETWORK_ERRORS = (aiohttp.ClientError, TimeoutError)
+
+
+def _place_key(city: str | None) -> str:
+    return (city or "").strip().lower() or "other"
+
+
+def _place_data(city: str | None, ids: list[str]) -> dict[str, Any]:
+    return {CONF_CITY: city, CONF_LOCATION_IDS: ids}
 
 
 def _title(loc: dict[str, Any]) -> str:
@@ -149,6 +159,19 @@ class _LocationSearch:
 
     async def _location_chosen(self, loc: dict[str, Any]) -> Any:
         raise NotImplementedError
+
+    async def _place_of(self, loc: dict[str, Any]) -> str | None:
+        """Town of a location; NDW has none in its feed, so ask the PDOK geocoder."""
+        if city := loc.get("city"):
+            return city
+        if self._source != SOURCE_NDW:
+            return None  # the geocoder only knows the Netherlands
+        try:
+            return await async_reverse_city(
+                async_get_clientsession(self.hass), loc["latitude"], loc["longitude"]
+            )
+        except _NETWORK_ERRORS:
+            return None
 
     @callback
     def async_remove(self) -> None:
@@ -369,6 +392,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._init_search(SOURCE_NDW, None)
         self._selected: dict[str, Any] | None = None
+        self._city: str | None = None
 
     @staticmethod
     @callback
@@ -445,6 +469,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
 
     async def _location_chosen(self, loc: dict[str, Any]) -> ConfigFlowResult:
         self._selected = loc
+        self._city = await self._place_of(loc)
         return await (
             self.async_step_interval_ndw()
             if self._source == SOURCE_NDW
@@ -479,9 +504,9 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
                 subentries=[
                     ConfigSubentryData(
                         subentry_type=SUBENTRY_LOCATION,
-                        title=_title(self._selected),
-                        data={CONF_LOCATION_ID: self._selected["id"]},
-                        unique_id=self._selected["id"],
+                        title=self._city or "Other",
+                        data=_place_data(self._city, [self._selected["id"]]),
+                        unique_id=_place_key(self._city),
                     )
                 ],
             )
@@ -571,13 +596,36 @@ class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
 
     @property
     def _known_ids(self) -> set[str]:
-        return {
-            sub.data[CONF_LOCATION_ID]
+        return {i for sub in self._places() for i in sub.data[CONF_LOCATION_IDS]}
+
+    def _places(self) -> list[Any]:
+        return [
+            sub
             for sub in self._get_entry().subentries.values()
             if sub.subentry_type == SUBENTRY_LOCATION
-        }
+        ]
 
     async def _location_chosen(self, loc: dict[str, Any]) -> SubentryFlowResult:
+        """Add the charger to the place it is in, or start a new place."""
+        city = await self._place_of(loc)
+        key = _place_key(city)
+        entry = self._get_entry()
+        for place in self._places():
+            if place.unique_id == key:
+                self.hass.config_entries.async_update_subentry(
+                    entry,
+                    place,
+                    data={
+                        **place.data,
+                        CONF_LOCATION_IDS: [*place.data[CONF_LOCATION_IDS], loc["id"]],
+                    },
+                )
+                return self.async_abort(
+                    reason="location_added",
+                    description_placeholders={"place": place.title},
+                )
         return self.async_create_entry(
-            title=_title(loc), data={CONF_LOCATION_ID: loc["id"]}, unique_id=loc["id"]
+            title=city or "Other",
+            data=_place_data(city, [loc["id"]]),
+            unique_id=key,
         )

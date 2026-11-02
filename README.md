@@ -18,9 +18,11 @@ HACS → Custom repositories → add this repo (type: Integration) → install �
 Settings → Devices & services → Add integration → "NDW Laadpalen".
 
 ## Structure
-One integration entry per source (**NDW** and/or **Open Charge Map**); every charging location is
-a *subentry* with its own device. Add more locations later via the entry's **⋮ → Add charging
-location**. The update interval is set per source (⋮ → Configure).
+**Source** (NDW / Open Charge Map, one entry each) → **place** (a town, one subentry) →
+**charging location** (one device, named by its address). "Add charging location" (⋮ on the
+entry) adds the charger to the place it is in, or creates that place. The town comes from OCM, or
+for NDW from the PDOK geocoder (the NDW feed has no town). Delete a charger's device to remove
+it from its place. The update interval is set per source (⋮ → Configure).
 
 ## Setup flow
 1. **Source**: NDW or OCM, with the pros and cons. OCM asks for its API key and checks it.
