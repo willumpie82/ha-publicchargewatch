@@ -92,12 +92,12 @@ def _key_schema(default: str = "") -> vol.Schema:
     )
 
 
-def _describe(loc: dict[str, Any], nl: bool) -> str:
+def _describe(loc: dict[str, Any]) -> str:
     """One line for the picker: name, operator, availability, power, price, distance."""
     parts = [_title(loc), loc.get("operator") or "?"]
     if "groups" in loc:  # NDW: live availability
         free = sum(g["available"] for g in loc["groups"])
-        parts.append(f"{free}/{loc['points']} {'vrij' if nl else 'free'}")
+        parts.append(f"{free}/{loc['points']} ✓")  # language-neutral: free of total
         if powers := [g["power_w"] for g in loc["groups"] if g["power_w"]]:
             parts.append(f"{round(max(powers) / 1000, 1):g} kW")
     else:  # OCM
@@ -105,7 +105,7 @@ def _describe(loc: dict[str, Any], nl: bool) -> str:
         if powers := [c["max_power_w"] for e in loc["evses"] for c in e["connectors"] if c["max_power_w"]]:
             parts.append(f"{round(max(powers) / 1000, 1):g} kW")
     if (price := loc.get("price_per_kwh")) is not None:
-        parts.append("gratis" if price == 0 and nl else "free" if price == 0 else f"€{price:.4f}/kWh")
+        parts.append(f"€{price:g}/kWh" if price == 0 else f"€{price:.4f}/kWh")
     parts.append(f"{loc['distance']} m")
     return " · ".join(parts)
 
@@ -383,9 +383,8 @@ class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
                 else self.async_step_interval_ocm()
             )
 
-        nl = self.hass.config.language.startswith("nl")
         options = [
-            SelectOptionDict(value=c["id"], label=_describe(c, nl))
+            SelectOptionDict(value=c["id"], label=_describe(c))
             for c in self._candidates.values()
         ]
         schema = vol.Schema(

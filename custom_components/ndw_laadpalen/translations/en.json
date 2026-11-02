@@ -137,7 +137,7 @@
         "name": "Price per kWh"
       },
       "last_updated": {
-        "name": "Last updated"
+        "name": "Last status change"
       },
       "evse_status": {
         "name": "Status",

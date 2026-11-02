@@ -28,7 +28,7 @@ Settings → Devices & services → Add integration → "NDW Laadpalen".
 
 ## Entities (created from the data the location actually has)
 - Location device: *available charge points* (NDW) or *operational charge points* (OCM),
-  *last updated* (diagnostic), *price per kWh* when known, and for NDW a *charge point available*
+  *last status change* (diagnostic), *price per kWh* when known, and for NDW a *charge point available*
   binary sensor.
 - NDW with several connector groups (e.g. Type 2 + CCS): one *available* sensor per group.
 - OCM: a status sensor per connection group (`Quantity` = identical sockets, as attribute).

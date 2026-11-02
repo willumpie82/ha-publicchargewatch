@@ -128,7 +128,7 @@ async def test_postcode_search(hass, mock_ndw):
     assert result["step_id"] == "select"
     selector = next(v for k, v in result["data_schema"].schema.items() if k == "location_id")
     labels = [o["label"] for o in selector.config["options"]]
-    assert labels[0].startswith("Teststraat 1 · Vattenfall InCharge · 1/2")
+    assert labels[0].startswith("Teststraat 1 · Vattenfall InCharge · 1/2 ✓")
     assert "€0.3256/kWh" in labels[0]
 
 

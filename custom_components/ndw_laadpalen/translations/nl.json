@@ -137,7 +137,7 @@
         "name": "Prijs per kWh"
       },
       "last_updated": {
-        "name": "Bijgewerkt"
+        "name": "Laatste statuswijziging"
       },
       "evse_status": {
         "name": "Status",
@@ -157,7 +157,7 @@
     },
     "binary_sensor": {
       "any_available": {
-        "name": "Laadpunt vrij"
+        "name": "Laadpunt beschikbaar"
       }
     }
   }
