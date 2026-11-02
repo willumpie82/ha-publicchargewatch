@@ -136,6 +136,7 @@ class _LocationSearch:
         self._candidates: dict[str, dict[str, Any]] = {}
         self._problem = "cannot_connect"
         self._problem_next = "location_method"
+        self._after_fetch = "location_method"  # step that follows the download
 
     @property
     def _client_data(self) -> dict[str, Any]:
@@ -175,7 +176,8 @@ class _LocationSearch:
             task.result()  # the shared feed keeps the download
         except _NETWORK_ERRORS:
             return self._fail("cannot_connect", "fetch")
-        return self.async_show_progress_done(next_step_id="location_method")
+        next_step, self._after_fetch = self._after_fetch, "location_method"
+        return self.async_show_progress_done(next_step_id=next_step)
 
     # --- 3. search method ----------------------------------------------------------
 
@@ -287,6 +289,14 @@ class _LocationSearch:
     async def async_step_search(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        if (
+            self._task is None
+            and self._source == SOURCE_NDW
+            and not get_client(self.hass, self._client_data).is_fresh(_FLOW_FEED_AGE)
+        ):
+            # the held feed is too old: show the download as its own progress step
+            self._after_fetch = "search"
+            return await self.async_step_fetch()
         if self._task is None:
             self._task = self.hass.async_create_task(self._run_search())
         if not self._task.done():
@@ -557,15 +567,6 @@ class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
     ) -> SubentryFlowResult:
         entry = self._get_entry()
         self._init_search(entry.data[CONF_SOURCE], entry.data.get(CONF_API_KEY))
-        if self._source == SOURCE_NDW:
-            # No progress screen: the first step of a subentry flow cannot show one
-            # (the frontend closes it as "created"). Usually the feed is already held.
-            try:
-                await get_client(self.hass, self._client_data).async_raw(
-                    max_age=_FLOW_FEED_AGE
-                )
-            except _NETWORK_ERRORS:
-                return self.async_abort(reason="cannot_connect")
         return await self.async_step_location_method()
 
     @property

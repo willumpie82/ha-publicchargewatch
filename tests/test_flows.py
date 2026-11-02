@@ -267,3 +267,21 @@ async def test_entries_share_one_download(hass, mock_ndw):
     # the cache covers every wanted location after a re-download
     both = await feed.async_get_locations({"NL-NUO-near", "NL-NUO-two"}, max_age=240)
     assert set(both) == {"NL-NUO-near", "NL-NUO-two"} and calls() == 3
+
+
+async def test_stale_feed_is_downloaded_in_its_own_progress_step(hass, mock_ndw):
+    await _add_ndw_location(hass, "NL-NUO-near")
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    hass.data[DOMAIN]["feed"]._fetched = -1e9  # far too old for a search
+    before = sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL)
+
+    flow = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "location"), context={"source": SOURCE_USER}
+    )
+    assert flow["type"] is FlowResultType.MENU  # nothing slow before the first screen
+    flow = await _configure_sub(hass, flow, {"next_step_id": "zone"})
+    flow = await _configure_sub(hass, flow, {"zone": "zone.home", "radius": 200})
+    # with mocked I/O the download may already be finished; either way it is its own step
+    flow = await _progress_sub(hass, flow)
+    assert flow["step_id"] == "select"
+    assert sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL) == before + 1

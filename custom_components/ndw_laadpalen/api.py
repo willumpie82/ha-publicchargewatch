@@ -84,6 +84,10 @@ class NdwFeed:
         self._raw, self._etag = result
         return True
 
+    def is_fresh(self, max_age: float) -> bool:
+        """Whether the held feed is young enough to be used without downloading."""
+        return self._raw is not None and time.monotonic() - self._fetched <= max_age
+
     async def async_raw(
         self, force: bool = False, max_age: float | None = None
     ) -> bytes:
