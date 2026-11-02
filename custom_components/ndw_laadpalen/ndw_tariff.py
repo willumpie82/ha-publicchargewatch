@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import date
 import gzip
 import io
+import json
+import re
 from typing import Any
 
 import ijson
@@ -75,11 +77,37 @@ def simplify_tariff(tariff: dict[str, Any], today: date) -> dict[str, Any]:
     }
 
 
-def scan_tariffs(raw: bytes, ids: set[str], today: date) -> dict[str, dict[str, Any]]:
-    """Stream the gzipped tariff file (~105k tariffs) and keep only the requested ids."""
+# Every tariff in the real file starts like this. Matching it avoids building Python objects
+# for the ~105k tariffs nobody asked for; only the requested ones are parsed as JSON.
+_TARIFF_START = re.compile(rb'\{"id": ?"([^"\\]*)", ?"country_code"')
+
+
+def _scan_fast(data: bytes, ids: set[str], today: date) -> dict[str, dict[str, Any]] | None:
+    """None if the file has another layout (the caller then streams it)."""
+    starts = list(_TARIFF_START.finditer(data))
+    if not starts:
+        return None
     found: dict[str, dict[str, Any]] = {}
-    with gzip.GzipFile(fileobj=io.BytesIO(raw)) as stream:
-        for tariff in ijson.items(stream, "item", use_float=True):
-            if tariff.get("id") in ids:
-                found[tariff["id"]] = simplify_tariff(tariff, today)
+    for index, match in enumerate(starts):
+        tariff_id = match.group(1).decode()
+        if tariff_id not in ids:
+            continue
+        end = starts[index + 1].start() if index + 1 < len(starts) else len(data)
+        try:
+            tariff = json.loads(data[match.start() : end].rstrip(b" \r\n,]"))
+        except ValueError:
+            return None
+        found[tariff_id] = simplify_tariff(tariff, today)
+    return found
+
+
+def scan_tariffs(raw: bytes, ids: set[str], today: date) -> dict[str, dict[str, Any]]:
+    """Keep only the requested ids from the gzipped tariff file (~105k tariffs)."""
+    data = gzip.decompress(raw)
+    if (found := _scan_fast(data, ids, today)) is not None:
+        return found
+    found = {}  # layout changed: slower but robust
+    for tariff in ijson.items(io.BytesIO(data), "item", use_float=True):
+        if tariff.get("id") in ids:
+            found[tariff["id"]] = simplify_tariff(tariff, today)
     return found
