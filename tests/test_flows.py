@@ -65,7 +65,7 @@ async def test_ndw_confirm_is_explained_and_can_go_back(hass, mock_ndw):
 
 async def test_ndw_flow_creates_entities_from_the_data(hass, mock_ndw):
     result = await _add_ndw_location(hass, "NL-NUO-near")
-    assert result["title"] == "Teststraat 1"
+    assert result["title"] == "NDW"
     assert result["options"] == {"scan_interval": 300}
 
     available = hass.states.get(_entity(hass, "sensor", "NL-NUO-near_available"))
@@ -92,13 +92,51 @@ async def test_group_sensors_only_when_there_are_several_groups(hass, mock_ndw):
     assert hass.states.get(_entity(hass, "sensor", "NL-NUO-two_available")).state == "2"
 
 
-async def test_second_ndw_location_skips_the_confirmation(hass, mock_ndw):
-    await _add_ndw_location(hass, "NL-NUO-near")
-    result = await _ndw_to_search_method(hass)
-    # straight to the download: no second confirmation
-    assert not (result["type"] is FlowResultType.MENU and result["step_id"] == "ndw_confirm")
-    result = await _progress(hass, result)
-    assert result["step_id"] == "location_method"
+async def test_second_location_is_a_subentry_of_the_same_entry(hass, mock_ndw):
+    first = await _add_ndw_location(hass, "NL-NUO-near")
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    assert first["title"] == "NDW" and entry.unique_id == "ndw"
+    assert len(entry.subentries) == 1
+
+    # a second NDW entry is refused: locations are added to the existing one
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    assert result["type"] is FlowResultType.FORM
+    sources = result["data_schema"].schema["source"].config["options"]
+    assert sources == ["ocm"]
+
+    flow = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "location"), context={"source": SOURCE_USER}
+    )
+    flow = await _progress_sub(hass, flow)
+    assert flow["step_id"] == "location_method"  # no second download warning
+    flow = await _configure_sub(hass, flow, {"next_step_id": "zone"})
+    flow = await _configure_sub(hass, flow, {"zone": "zone.home", "radius": 200})
+    flow = await _progress_sub(hass, flow)
+    assert flow["step_id"] == "select"
+    selector = next(v for k, v in flow["data_schema"].schema.items() if k == "location_id")
+    values = [o["value"] for o in selector.config["options"]]
+    assert "NL-NUO-near" not in values  # already added
+    flow = await _configure_sub(hass, flow, {"location_id": "NL-NUO-two"})
+    assert flow["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+    assert len(entry.subentries) == 2
+    assert hass.states.get(_entity(hass, "sensor", "NL-NUO-two_available")).state == "2"
+    assert hass.states.get(_entity(hass, "sensor", "NL-NUO-near_available")).state == "1"
+    checked = hass.states.get(_entity(hass, "sensor", "NL-NUO-near_checked"))
+    assert checked.attributes["last_update_ok"] is True
+
+
+async def _configure_sub(hass, result, user_input):
+    return await hass.config_entries.subentries.async_configure(result["flow_id"], user_input)
+
+
+async def _progress_sub(hass, result):
+    while result["type"] in (FlowResultType.SHOW_PROGRESS, FlowResultType.SHOW_PROGRESS_DONE):
+        await hass.async_block_till_done()
+        result = await hass.config_entries.subentries.async_configure(result["flow_id"])
+    return result
 
 
 async def test_tariff_failure_does_not_break_availability(hass, aioclient_mock):

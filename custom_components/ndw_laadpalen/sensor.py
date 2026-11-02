@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import NdwConfigEntry
-from .const import EVSE_STATUSES
+from .const import CONF_LOCATION_ID, EVSE_STATUSES
 from .coordinator import NdwCoordinator
 from .entity import NdwEvseEntity, NdwLocationEntity
 from .parser import group_label
@@ -22,41 +22,64 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: NdwConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
+    for subentry in entry.subentries.values():
+        _setup_location(
+            entry,
+            coordinator,
+            subentry.data[CONF_LOCATION_ID],
+            subentry.subentry_id,
+            async_add_entities,
+        )
+
+
+def _setup_location(
+    entry: NdwConfigEntry,
+    coordinator: NdwCoordinator,
+    location_id: str,
+    subentry_id: str,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    if location_id not in coordinator.data:
+        return  # not in the source's data right now; a reload picks it up later
     async_add_entities(
         [
-            NdwAvailableSensor(coordinator)
+            NdwAvailableSensor(coordinator, location_id)
             if coordinator.live_occupancy
-            else NdwOperationalSensor(coordinator),
-            NdwUpdatedSensor(coordinator),
-        ]
+            else NdwOperationalSensor(coordinator, location_id),
+            NdwUpdatedSensor(coordinator, location_id),
+            NdwCheckedSensor(coordinator, location_id),
+        ],
+        config_subentry_id=subentry_id,
     )
 
     known: set[str] = set()
 
     def _add_new() -> None:
         """Create entities for data that appeared (also called once at setup)."""
-        data = coordinator.data
+        data = coordinator.data.get(location_id)
+        if data is None:
+            return
         new: list[SensorEntity] = []
         if coordinator.live_occupancy:
             if len(data["groups"]) > 1:  # with one group it would repeat the location total
                 new += [
-                    NdwGroupSensor(coordinator, g["key"])
+                    NdwGroupSensor(coordinator, location_id, g["key"])
                     for g in data["groups"]
                     if f"group_{g['key']}" not in known
                 ]
                 known.update(f"group_{g['key']}" for g in data["groups"])
         else:
             new += [
-                NdwEvseStatusSensor(coordinator, e["evse_id"])
+                NdwEvseStatusSensor(coordinator, location_id, e["evse_id"])
                 for e in data["evses"]
                 if e["evse_id"] not in known
             ]
             known.update(e["evse_id"] for e in data["evses"])
         if data.get("price_per_kwh") is not None and "price" not in known:
             known.add("price")
-            new.append(NdwPriceSensor(coordinator))
+            new.append(NdwPriceSensor(coordinator, location_id))
         if new:
-            async_add_entities(new)
+            async_add_entities(new, config_subentry_id=subentry_id)
 
     _add_new()
     entry.async_on_unload(coordinator.async_add_listener(_add_new))
@@ -80,9 +103,9 @@ class NdwAvailableSensor(NdwLocationEntity, SensorEntity):
     _attr_translation_key = "available_points"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: NdwCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.location_id}_available"
+    def __init__(self, coordinator: NdwCoordinator, location_id: str) -> None:
+        super().__init__(coordinator, location_id)
+        self._attr_unique_id = f"{location_id}_available"
 
     @property
     def native_value(self) -> int:
@@ -99,10 +122,10 @@ class NdwGroupSensor(NdwLocationEntity, SensorEntity):
     _attr_translation_key = "group_available"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: NdwCoordinator, key: str) -> None:
-        super().__init__(coordinator)
+    def __init__(self, coordinator: NdwCoordinator, location_id: str, key: str) -> None:
+        super().__init__(coordinator, location_id)
         self._key = key
-        self._attr_unique_id = f"{coordinator.location_id}_{key}"
+        self._attr_unique_id = f"{location_id}_{key}"
         group = self.group or {}
         self._attr_translation_placeholders = {"group": group_label(group)}
 
@@ -137,9 +160,9 @@ class NdwOperationalSensor(NdwLocationEntity, SensorEntity):
     _attr_translation_key = "operational_points"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator: NdwCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.location_id}_operational"
+    def __init__(self, coordinator: NdwCoordinator, location_id: str) -> None:
+        super().__init__(coordinator, location_id)
+        self._attr_unique_id = f"{location_id}_operational"
 
     @property
     def native_value(self) -> int:
@@ -161,8 +184,10 @@ class NdwEvseStatusSensor(NdwEvseEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = EVSE_STATUSES
 
-    def __init__(self, coordinator: NdwCoordinator, evse_id: str) -> None:
-        super().__init__(coordinator, evse_id)
+    def __init__(
+        self, coordinator: NdwCoordinator, location_id: str, evse_id: str
+    ) -> None:
+        super().__init__(coordinator, location_id, evse_id)
         self._attr_unique_id = f"{evse_id}_status"
 
     @property
@@ -200,9 +225,9 @@ class NdwPriceSensor(NdwLocationEntity, SensorEntity):
     _attr_native_unit_of_measurement = "EUR/kWh"
     _attr_suggested_display_precision = 4
 
-    def __init__(self, coordinator: NdwCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.location_id}_price"
+    def __init__(self, coordinator: NdwCoordinator, location_id: str) -> None:
+        super().__init__(coordinator, location_id)
+        self._attr_unique_id = f"{location_id}_price"
 
     @property
     def native_value(self) -> float | None:
@@ -233,12 +258,36 @@ class NdwUpdatedSensor(NdwLocationEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, coordinator: NdwCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.location_id}_updated"
+    def __init__(self, coordinator: NdwCoordinator, location_id: str) -> None:
+        super().__init__(coordinator, location_id)
+        self._attr_unique_id = f"{location_id}_updated"
 
     @property
     def native_value(self) -> datetime | None:
         if text := self.location.get("last_updated"):
             return dt_util.parse_datetime(text)
         return None
+
+
+class NdwCheckedSensor(NdwLocationEntity, SensorEntity):
+    """When we last fetched this location successfully; stale means updates are failing."""
+
+    _attr_translation_key = "last_checked"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: NdwCoordinator, location_id: str) -> None:
+        super().__init__(coordinator, location_id)
+        self._attr_unique_id = f"{location_id}_checked"
+
+    @property
+    def available(self) -> bool:
+        return True  # must stay readable while updates fail
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self.coordinator.last_success
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"last_update_ok": self.coordinator.last_update_success}

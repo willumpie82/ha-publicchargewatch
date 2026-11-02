@@ -16,11 +16,12 @@ class NdwLocationEntity(CoordinatorEntity[NdwCoordinator]):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: NdwCoordinator) -> None:
+    def __init__(self, coordinator: NdwCoordinator, location_id: str) -> None:
         super().__init__(coordinator)
-        loc = coordinator.data
+        self.location_id = location_id
+        loc = coordinator.data[location_id]
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.location_id)},
+            identifiers={(DOMAIN, location_id)},
             name=", ".join(p for p in (loc["address"], loc["city"]) if p),
             manufacturer=loc.get("operator"),
             model="Charging location",
@@ -28,21 +29,27 @@ class NdwLocationEntity(CoordinatorEntity[NdwCoordinator]):
 
     @property
     def location(self) -> dict[str, Any]:
-        return self.coordinator.data
+        return self.coordinator.data[self.location_id]
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.location_id in self.coordinator.data
 
 
 class NdwEvseEntity(NdwLocationEntity):
     """Entity attached to a single charge point (EVSE) device."""
 
-    def __init__(self, coordinator: NdwCoordinator, evse_id: str) -> None:
-        super().__init__(coordinator)
+    def __init__(
+        self, coordinator: NdwCoordinator, location_id: str, evse_id: str
+    ) -> None:
+        super().__init__(coordinator, location_id)
         self.evse_id = evse_id
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, evse_id)},
             name=evse_id,
-            manufacturer=coordinator.data.get("operator"),
+            manufacturer=coordinator.data[location_id].get("operator"),
             model="Charge point",
-            via_device=(DOMAIN, coordinator.location_id),
+            via_device=(DOMAIN, location_id),
         )
 
     @property

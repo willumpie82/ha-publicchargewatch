@@ -101,8 +101,9 @@
       "zone_not_found": "Deze zone heeft geen locatie."
     },
     "abort": {
-      "already_configured": "Deze laadlocatie is al toegevoegd.",
-      "reauth_successful": "API-key bijgewerkt."
+      "already_configured": "Deze bron is al ingesteld. Voeg laadlocaties toe via ‘Laadlocatie toevoegen’ bij die bron.",
+      "reauth_successful": "API-key bijgewerkt.",
+      "all_configured": "Deze bron is al ingesteld. Voeg laadlocaties toe via ‘Laadlocatie toevoegen’ bij die bron."
     }
   },
   "options": {
@@ -110,7 +111,8 @@
       "init": {
         "data": {
           "scan_interval": "Ververstijd (seconden)"
-        }
+        },
+        "description": "Geldt voor alle laadlocaties van deze bron."
       }
     }
   },
@@ -153,6 +155,9 @@
           "reserved": "Gereserveerd",
           "unknown": "Onbekend"
         }
+      },
+      "last_checked": {
+        "name": "Laatste update"
       }
     },
     "binary_sensor": {
@@ -163,6 +168,74 @@
     "button": {
       "refresh": {
         "name": "Verversen"
+      }
+    }
+  },
+  "config_subentries": {
+    "location": {
+      "initiate_flow": {
+        "user": "Laadlocatie toevoegen"
+      },
+      "entry_type": "Laadlocatie",
+      "step": {
+        "location_method": {
+          "title": "Waar zoeken?",
+          "description": "Kies hoe je de zoekplek opgeeft.",
+          "menu_options": {
+            "zone": "Een zone (bijvoorbeeld Thuis)",
+            "postcode": "Postcode (alleen Nederland)",
+            "map": "Een punt op de kaart"
+          }
+        },
+        "zone": {
+          "title": "Zoeken rond een zone",
+          "data": {
+            "zone": "Zone",
+            "radius": "Zoekradius"
+          }
+        },
+        "postcode": {
+          "title": "Zoeken rond een postcode",
+          "description": "Met huisnummer zoek je rond dat adres, zonder huisnummer rond het midden van de postcode.",
+          "data": {
+            "postcode": "Postcode",
+            "house_number": "Huisnummer (optioneel)",
+            "radius": "Zoekradius"
+          }
+        },
+        "map": {
+          "title": "Zoeken rond een punt",
+          "description": "Verplaats de pin en stel de radius in. De pin begint op je thuislocatie.",
+          "data": {
+            "location": "Zoekgebied"
+          }
+        },
+        "problem": {
+          "title": "Dat is niet gelukt",
+          "description": "Druk op Verzenden om het opnieuw te proberen."
+        },
+        "select": {
+          "title": "Kies een laadlocatie",
+          "description": "Gesorteerd op afstand, met de huidige beschikbaarheid, het vermogen en de prijs als die bekend zijn.",
+          "data": {
+            "location_id": "Laadlocatie"
+          }
+        }
+      },
+      "progress": {
+        "fetch": "NDW-gegevens ophalen (~5 MB)…",
+        "search": "Laadlocaties zoeken in de omgeving…"
+      },
+      "error": {
+        "cannot_connect": "Kan de gegevens niet ophalen.",
+        "invalid_auth": "Ongeldige API-key.",
+        "no_locations": "Geen laadlocaties gevonden in dit gebied. Vergroot de radius of kies een andere plek.",
+        "postcode_invalid": "Dit is geen geldige Nederlandse postcode (bijvoorbeeld 5223 HS).",
+        "postcode_not_found": "Postcode niet gevonden.",
+        "zone_not_found": "Deze zone heeft geen locatie."
+      },
+      "abort": {
+        "already_configured": "Deze laadlocatie is al toegevoegd."
       }
     }
   }

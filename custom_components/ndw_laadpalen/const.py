@@ -41,3 +41,5 @@ EVSE_STATUSES = [
     "reserved",
     "unknown",
 ]
+
+SUBENTRY_LOCATION = "location"

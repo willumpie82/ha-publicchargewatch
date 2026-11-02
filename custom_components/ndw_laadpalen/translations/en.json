@@ -101,8 +101,9 @@
       "zone_not_found": "This zone has no location."
     },
     "abort": {
-      "already_configured": "This charging location is already added.",
-      "reauth_successful": "API key updated."
+      "already_configured": "This source is already set up. Add locations with ‘Add charging location’ on that entry.",
+      "reauth_successful": "API key updated.",
+      "all_configured": "This source is already set up. Add locations with ‘Add charging location’ on that entry."
     }
   },
   "options": {
@@ -110,7 +111,8 @@
       "init": {
         "data": {
           "scan_interval": "Update interval (seconds)"
-        }
+        },
+        "description": "Applies to all locations of this source."
       }
     }
   },
@@ -153,6 +155,9 @@
           "reserved": "Reserved",
           "unknown": "Unknown"
         }
+      },
+      "last_checked": {
+        "name": "Last update"
       }
     },
     "binary_sensor": {
@@ -163,6 +168,74 @@
     "button": {
       "refresh": {
         "name": "Refresh"
+      }
+    }
+  },
+  "config_subentries": {
+    "location": {
+      "initiate_flow": {
+        "user": "Add charging location"
+      },
+      "entry_type": "Charging location",
+      "step": {
+        "location_method": {
+          "title": "Where to search?",
+          "description": "Choose how to give the search location.",
+          "menu_options": {
+            "zone": "A zone (for example Home)",
+            "postcode": "Postcode (Netherlands only)",
+            "map": "A point on the map"
+          }
+        },
+        "zone": {
+          "title": "Search around a zone",
+          "data": {
+            "zone": "Zone",
+            "radius": "Search radius"
+          }
+        },
+        "postcode": {
+          "title": "Search around a postcode",
+          "description": "With a house number the search is around that address, without one around the middle of the postcode.",
+          "data": {
+            "postcode": "Postcode",
+            "house_number": "House number (optional)",
+            "radius": "Search radius"
+          }
+        },
+        "map": {
+          "title": "Search around a point",
+          "description": "Move the pin and set the radius. The pin starts at your home location.",
+          "data": {
+            "location": "Search area"
+          }
+        },
+        "problem": {
+          "title": "That did not work",
+          "description": "Press Submit to try again."
+        },
+        "select": {
+          "title": "Choose a charging location",
+          "description": "Sorted by distance, with current availability, power and price when known.",
+          "data": {
+            "location_id": "Charging location"
+          }
+        }
+      },
+      "progress": {
+        "fetch": "Fetching NDW data (~5 MB)…",
+        "search": "Searching for charging locations nearby…"
+      },
+      "error": {
+        "cannot_connect": "Could not fetch the data.",
+        "invalid_auth": "Invalid API key.",
+        "no_locations": "No charging locations found in this area. Increase the radius or pick another place.",
+        "postcode_invalid": "That is not a valid Dutch postcode (for example 5223 HS).",
+        "postcode_not_found": "Postcode not found.",
+        "zone_not_found": "This zone has no location."
+      },
+      "abort": {
+        "already_configured": "This location is already added."
       }
     }
   }

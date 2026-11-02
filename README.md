@@ -17,18 +17,25 @@ The old oplaadpalen.nl API is gone (`410 Gone`).
 HACS → Custom repositories → add this repo (type: Integration) → install → restart HA.
 Settings → Devices & services → Add integration → "NDW Laadpalen".
 
+## Structure
+One integration entry per source (**NDW** and/or **Open Charge Map**); every charging location is
+a *subentry* with its own device. Add more locations later via the entry's **⋮ → Add charging
+location**. The update interval is set per source (⋮ → Configure).
+
 ## Setup flow
 1. **Source**: NDW or OCM, with the pros and cons. OCM asks for its API key and checks it.
 2. **NDW only, first time**: a confirmation explains the download (what, why, how often) with
-   "Continue" or "Back". Further NDW locations skip it.
+   "Continue" or "Back". Adding locations later skips it.
 3. **Where to search**: a zone (default Home), a Dutch postcode (+ optional house number, via the
    free PDOK geocoder) or a point on the map; radius 50–500 m (default 200).
 4. **Pick a charger** from a list with distance, availability, power and price.
 5. **Refresh interval**, with the data-traffic note for NDW.
+Further locations repeat steps 3–4 only (already added ones are hidden).
 
 ## Entities (created from the data the location actually has)
 - Location device: *available charge points* (NDW) or *operational charge points* (OCM),
-  *last status change* (diagnostic), *price per kWh* when known, and for NDW a *charge point available*
+  *last status change* and *last update* (diagnostic; the latter is when we last fetched
+  successfully, so it shows when updates are failing), *price per kWh* when known, and for NDW a *charge point available*
   binary sensor.
 - A diagnostic *Refresh* button checks for new data right now (bypasses the shared 60 s window;
   the ETag still skips the download when NDW's file is unchanged).
@@ -38,8 +45,8 @@ Settings → Devices & services → Add integration → "NDW Laadpalen".
   VAT, start fee, time/parking price, and whether conditional (day/night) rates exist.
 
 ## How it behaves
-- NDW feeds are streamed with `ijson` (never loaded whole), shared by all NDW entries
-  (one download serves every entry within ~80% of the update interval, even when their
+- NDW feeds are streamed with `ijson` (never loaded whole), shared by all NDW locations
+  (one download serves every location within ~80% of the update interval, even when their
   timers are offset; HTTP 304 when unchanged; the raw feed stays in memory, ~5 MB).
 - Tariffs are fetched at most once a day and stored, so a restart does not re-download them.
   If the tariff download fails the last known price stays and availability is unaffected.

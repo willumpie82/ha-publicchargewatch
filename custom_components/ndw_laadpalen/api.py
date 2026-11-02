@@ -38,6 +38,7 @@ class NdwFeed:
         self._session = session
         self._lock = asyncio.Lock()
         self._raw: bytes | None = None  # the feed behind _cache (~5 MB)
+        self._cache_stale = False
         self._etag: str | None = None
         self._fetched = 0.0
         self._wanted: set[str] = set()
@@ -61,23 +62,47 @@ class NdwFeed:
 
     # --- locations -------------------------------------------------------------
 
-    async def async_download_raw(self) -> bytes:
-        """The raw gzipped locations feed (used by the config flow)."""
+    async def _refresh_raw(self, force: bool, max_age: float | None) -> bool:
+        """Make sure the raw feed is fresh enough (caller holds the lock).
+
+        Returns True when new data was downloaded. The ETag belongs to the raw feed we
+        hold; without a raw feed there is no ETag to send.
+        """
+        limit = MIN_FEED_AGE if max_age is None else max_age
+        if (
+            not force
+            and self._raw is not None
+            and time.monotonic() - self._fetched <= limit
+        ):
+            return False
+        result = await self._download(
+            FEED_URL, self._etag if self._raw is not None else None
+        )
+        self._fetched = time.monotonic()
+        if result is None:  # 304: unchanged
+            return False
+        self._raw, self._etag = result
+        return True
+
+    async def async_raw(
+        self, force: bool = False, max_age: float | None = None
+    ) -> bytes:
+        """The raw gzipped feed (config flows); shared with the coordinator."""
         async with self._lock:
-            result = await self._download(FEED_URL, None)
-        assert result is not None
-        return result[0]
+            if await self._refresh_raw(force, max_age):
+                self._cache_stale = True
+            assert self._raw is not None
+            return self._raw
 
     async def async_nearby(
         self,
         latitude: float,
         longitude: float,
         radius_m: float,
-        raw: bytes | None = None,
+        max_age: float | None = None,
     ) -> list[dict[str, Any]]:
-        """Locations around a point; pass the raw feed to avoid a second download."""
-        if raw is None:
-            raw = await self.async_download_raw()
+        """Locations around a point, from the shared feed."""
+        raw = await self.async_raw(max_age=max_age)
         return await self._hass.async_add_executor_job(
             find_nearby, raw, latitude, longitude, radius_m
         )
@@ -88,33 +113,19 @@ class NdwFeed:
         """Current availability for the given location ids, with prices attached.
 
         All NDW entries share one download: data younger than max_age is reused (the
-        coordinators pass most of their update interval, so entries whose timers are
-        offset still share it). force skips that (manual refresh); the ETag still avoids
-        downloading an unchanged file. The raw feed is kept, so a newly added location is
-        found without another download.
+        coordinator passes most of its update interval). force skips that (manual
+        refresh); the ETag still avoids downloading an unchanged file. The raw feed is
+        kept, so a newly added location is found without another download.
         """
         async with self._lock:
             self._wanted |= ids
-            limit = MIN_FEED_AGE if max_age is None else max_age
-            stale = (
-                force
-                or self._raw is None
-                or time.monotonic() - self._fetched > limit
-            )
-            changed = False
-            if stale:
-                # the ETag belongs to the raw feed we hold; without it, download fully
-                result = await self._download(
-                    FEED_URL, self._etag if self._raw is not None else None
-                )
-                if result is not None:
-                    self._raw, self._etag = result
-                    changed = True
-                self._fetched = time.monotonic()
-            if changed or ids - self._cache.keys():
+            if await self._refresh_raw(force, max_age):
+                self._cache_stale = True
+            if self._cache_stale or ids - self._cache.keys():
                 self._cache = await self._hass.async_add_executor_job(
                     find_by_ids, self._raw, set(self._wanted)
                 )
+                self._cache_stale = False
             # copies: prices are attached below and must not leak into the shared cache
             locations = {i: deepcopy(self._cache[i]) for i in ids if i in self._cache}
 

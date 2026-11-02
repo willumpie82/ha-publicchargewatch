@@ -1,7 +1,12 @@
 """Config flow.
 
-source -> (OCM: API key | NDW: confirm the download) -> search method (zone / postcode / map)
--> search (progress) -> pick a charger -> update interval.
+One config entry per source (NDW or Open Charge Map); every charging location is a
+subentry. The first one is chosen while setting up the entry:
+
+source -> (OCM: API key | NDW: confirm the download) -> search method (zone / postcode /
+map) -> search (progress) -> pick a charger -> update interval.
+
+"Add charging location" on the entry repeats the search part for another location.
 """
 
 from __future__ import annotations
@@ -17,7 +22,10 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    ConfigSubentryData,
+    ConfigSubentryFlow,
     OptionsFlow,
+    SubentryFlowResult,
 )
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -57,6 +65,7 @@ from .const import (
     SCAN_INTERVALS,
     SOURCE_NDW,
     SOURCE_OCM,
+    SUBENTRY_LOCATION,
 )
 from .geocode import async_geocode_postcode, normalize_postcode
 from .ocm import OcmAuthError
@@ -110,96 +119,42 @@ def _describe(loc: dict[str, Any]) -> str:
     return " · ".join(parts)
 
 
-class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle the config flow."""
+_FLOW_FEED_AGE = 600  # seconds: a search may reuse a recent NDW download
 
-    VERSION = 1
 
-    def __init__(self) -> None:
-        self._source: str = SOURCE_NDW
-        self._api_key: str | None = None
-        self._raw: bytes | None = None  # NDW feed, kept only while the flow runs
+class _LocationSearch:
+    """Steps shared by the entry flow and the "add charging location" subentry flow."""
+
+    hass: Any
+    _auth_step = "location_method"  # where to go when the OCM key is rejected
+
+    def _init_search(self, source: str, api_key: str | None) -> None:
+        self._source = source
+        self._api_key = api_key
         self._task: asyncio.Task | None = None
         self._search: tuple[float, float, float] | None = None
         self._candidates: dict[str, dict[str, Any]] = {}
-        self._selected: dict[str, Any] | None = None
-        self._problem: str = "cannot_connect"
-        self._problem_next: str = "user"
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        return NdwOptionsFlow()
-
-    @callback
-    def async_remove(self) -> None:
-        if self._task and not self._task.done():
-            self._task.cancel()
-        self._raw = None
+        self._problem = "cannot_connect"
+        self._problem_next = "location_method"
 
     @property
     def _client_data(self) -> dict[str, Any]:
         return {CONF_SOURCE: self._source, CONF_API_KEY: self._api_key}
 
-    # --- 1. source -----------------------------------------------------------------
+    @property
+    def _known_ids(self) -> set[str]:
+        """Locations that are already added (hidden from the picker)."""
+        return set()
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        if user_input is not None:
-            self._source = user_input[CONF_SOURCE]
-            if self._source == SOURCE_OCM:
-                return await self.async_step_api_key()
-            if any(
-                e.data.get(CONF_SOURCE, SOURCE_NDW) == SOURCE_NDW
-                for e in self._async_current_entries()
-            ):
-                return await self.async_step_fetch()  # already confirmed once
-            return await self.async_step_ndw_confirm()
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_SOURCE, default=SOURCE_NDW): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[SOURCE_NDW, SOURCE_OCM],
-                        translation_key=CONF_SOURCE,
-                        mode=SelectSelectorMode.LIST,
-                    )
-                )
-            }
-        )
-        return self.async_show_form(step_id="user", data_schema=schema)
+    async def _location_chosen(self, loc: dict[str, Any]) -> Any:
+        raise NotImplementedError
 
-    # --- 2a. OCM: API key ----------------------------------------------------------
+    @callback
+    def async_remove(self) -> None:
+        if self._task and not self._task.done():
+            self._task.cancel()
 
-    async def async_step_api_key(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            self._api_key = user_input[CONF_API_KEY].strip()
-            try:
-                await get_client(self.hass, self._client_data).async_validate()
-            except OcmAuthError:
-                errors["base"] = "invalid_auth"
-            except _NETWORK_ERRORS:
-                errors["base"] = "cannot_connect"
-            else:
-                return await self.async_step_location_method()
-        return self.async_show_form(
-            step_id="api_key",
-            data_schema=_key_schema(self._api_key or ""),
-            description_placeholders={"api_url": OCM_API_URL},
-            errors=errors,
-        )
-
-    # --- 2b. NDW: explain and confirm the download, then fetch it -------------------
-
-    async def async_step_ndw_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        return self.async_show_menu(
-            step_id="ndw_confirm", menu_options=["fetch", "user"]
-        )
+    # --- NDW: download the feed (progress screen) ----------------------------------
 
     async def async_step_fetch(
         self, user_input: dict[str, Any] | None = None
@@ -207,7 +162,9 @@ class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
         """Download the NDW feed (progress screen)."""
         if self._task is None:
             self._task = self.hass.async_create_task(
-                get_client(self.hass, self._client_data).async_download_raw()
+                get_client(self.hass, self._client_data).async_raw(
+                    max_age=_FLOW_FEED_AGE
+                )
             )
         if not self._task.done():
             return self.async_show_progress(
@@ -215,7 +172,7 @@ class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
             )
         task, self._task = self._task, None
         try:
-            self._raw = task.result()
+            task.result()  # the shared feed keeps the download
         except _NETWORK_ERRORS:
             return self._fail("cannot_connect", "fetch")
         return self.async_show_progress_done(next_step_id="location_method")
@@ -318,7 +275,7 @@ class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
         assert self._search is not None
         client = get_client(self.hass, self._client_data)
         if self._source == SOURCE_NDW:
-            found = await client.async_nearby(*self._search, raw=self._raw)
+            found = await client.async_nearby(*self._search, max_age=_FLOW_FEED_AGE)
             tariffs = await client.async_get_tariffs(
                 {t for loc in found for g in loc["groups"] for t in g["tariff_ids"]}
             )
@@ -340,9 +297,12 @@ class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
         try:
             found = task.result()
         except OcmAuthError:
-            return self._fail("invalid_auth", "api_key")
+            return self._fail("invalid_auth", self._auth_step)
         except _NETWORK_ERRORS:
             return self._fail("cannot_connect", "location_method")
+        if not found:
+            return self._fail("no_locations", "location_method")
+        found = [c for c in found if c["id"] not in self._known_ids]
         if not found:
             return self._fail("no_locations", "location_method")
         self._candidates = {c["id"]: c for c in found}
@@ -372,15 +332,8 @@ class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
         # After a progress screen HA hands this step the previous form's input, so only
         # react to our own field.
         if user_input is not None and CONF_LOCATION_ID in user_input:
-            loc = self._candidates[user_input[CONF_LOCATION_ID]]
-            await self.async_set_unique_id(loc["id"])
-            self._abort_if_unique_id_configured()
-            self._selected = loc
-            self._raw = None
-            return await (
-                self.async_step_interval_ndw()
-                if self._source == SOURCE_NDW
-                else self.async_step_interval_ocm()
+            return await self._location_chosen(
+                self._candidates[user_input[CONF_LOCATION_ID]]
             )
 
         options = [
@@ -395,6 +348,98 @@ class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="select", data_schema=schema)
+
+
+class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
+    """Set up a source; its first charging location is chosen right away."""
+
+    VERSION = 1
+    _auth_step = "api_key"
+
+    def __init__(self) -> None:
+        self._init_search(SOURCE_NDW, None)
+        self._selected: dict[str, Any] | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        return NdwOptionsFlow()
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        return {SUBENTRY_LOCATION: LocationSubentryFlow}
+
+    # --- 1. source -----------------------------------------------------------------
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            self._source = user_input[CONF_SOURCE]
+            await self.async_set_unique_id(self._source)
+            self._abort_if_unique_id_configured()  # add locations to that entry instead
+            if self._source == SOURCE_OCM:
+                return await self.async_step_api_key()
+            return await self.async_step_ndw_confirm()
+        configured = {e.unique_id for e in self._async_current_entries()}
+        options = [s for s in (SOURCE_NDW, SOURCE_OCM) if s not in configured]
+        if not options:
+            return self.async_abort(reason="already_configured")
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_SOURCE, default=options[0]): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options,
+                        translation_key=CONF_SOURCE,
+                        mode=SelectSelectorMode.LIST,
+                    )
+                )
+            }
+        )
+        return self.async_show_form(step_id="user", data_schema=schema)
+
+    # --- 2a. OCM: API key ----------------------------------------------------------
+
+    async def async_step_api_key(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            self._api_key = user_input[CONF_API_KEY].strip()
+            try:
+                await get_client(self.hass, self._client_data).async_validate()
+            except OcmAuthError:
+                errors["base"] = "invalid_auth"
+            except _NETWORK_ERRORS:
+                errors["base"] = "cannot_connect"
+            else:
+                return await self.async_step_location_method()
+        return self.async_show_form(
+            step_id="api_key",
+            data_schema=_key_schema(self._api_key or ""),
+            description_placeholders={"api_url": OCM_API_URL},
+            errors=errors,
+        )
+
+    # --- 2b. NDW: explain and confirm the download, then fetch it -------------------
+
+    async def async_step_ndw_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return self.async_show_menu(
+            step_id="ndw_confirm", menu_options=["fetch", "user"]
+        )
+
+    async def _location_chosen(self, loc: dict[str, Any]) -> ConfigFlowResult:
+        self._selected = loc
+        return await (
+            self.async_step_interval_ndw()
+            if self._source == SOURCE_NDW
+            else self.async_step_interval_ocm()
+        )
 
     # --- 6. update interval --------------------------------------------------------
 
@@ -414,13 +459,21 @@ class NdwConfigFlow(ConfigFlow, domain=DOMAIN):
         assert self._selected is not None
         default, minimum = SCAN_INTERVALS[self._source]
         if user_input is not None:
-            data = {CONF_SOURCE: self._source, CONF_LOCATION_ID: self._selected["id"]}
+            data = {CONF_SOURCE: self._source}
             if self._source == SOURCE_OCM:
                 data[CONF_API_KEY] = self._api_key
             return self.async_create_entry(
-                title=_title(self._selected),
+                title="NDW" if self._source == SOURCE_NDW else "Open Charge Map",
                 data=data,
                 options={CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])},
+                subentries=[
+                    ConfigSubentryData(
+                        subentry_type=SUBENTRY_LOCATION,
+                        title=_title(self._selected),
+                        data={CONF_LOCATION_ID: self._selected["id"]},
+                        unique_id=self._selected["id"],
+                    )
+                ],
             )
         return self.async_show_form(
             step_id=step_id,
@@ -493,4 +546,30 @@ class NdwOptionsFlow(OptionsFlow):
         current = self.config_entry.options.get(CONF_SCAN_INTERVAL, default)
         return self.async_show_form(
             step_id="init", data_schema=_interval_schema(current, default, minimum)
+        )
+
+
+class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
+    """"Add charging location" on an existing source."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        entry = self._get_entry()
+        self._init_search(entry.data[CONF_SOURCE], entry.data.get(CONF_API_KEY))
+        if self._source == SOURCE_NDW:
+            return await self.async_step_fetch()
+        return await self.async_step_location_method()
+
+    @property
+    def _known_ids(self) -> set[str]:
+        return {
+            sub.data[CONF_LOCATION_ID]
+            for sub in self._get_entry().subentries.values()
+            if sub.subentry_type == SUBENTRY_LOCATION
+        }
+
+    async def _location_chosen(self, loc: dict[str, Any]) -> SubentryFlowResult:
+        return self.async_create_entry(
+            title=_title(loc), data={CONF_LOCATION_ID: loc["id"]}, unique_id=loc["id"]
         )
