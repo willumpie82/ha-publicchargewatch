@@ -145,7 +145,9 @@ class OcmClient:
                 found.append(loc)
         return sorted(found, key=lambda loc: loc["distance"])
 
-    async def async_get_locations(self, ids: set[str]) -> dict[str, dict[str, Any]]:
+    async def async_get_locations(
+        self, ids: set[str], force: bool = False  # noqa: ARG002 - every call is fresh
+    ) -> dict[str, dict[str, Any]]:
         numeric = [i.removeprefix(ID_PREFIX) for i in ids]
         pois = await self._get(
             {"chargepointid": ",".join(numeric), "maxresults": len(numeric)}

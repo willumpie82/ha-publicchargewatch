@@ -30,6 +30,8 @@ Settings → Devices & services → Add integration → "NDW Laadpalen".
 - Location device: *available charge points* (NDW) or *operational charge points* (OCM),
   *last status change* (diagnostic), *price per kWh* when known, and for NDW a *charge point available*
   binary sensor.
+- A diagnostic *Refresh* button checks for new data right now (bypasses the shared 60 s window;
+  the ETag still skips the download when NDW's file is unchanged).
 - NDW with several connector groups (e.g. Type 2 + CCS): one *available* sensor per group.
 - OCM: a status sensor per connection group (`Quantity` = identical sockets, as attribute).
 - Price attributes: source text, basis (`tariff`, `per_kwh`, `assumed_per_kwh`, `free`, `unknown`),

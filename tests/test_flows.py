@@ -186,3 +186,19 @@ async def test_ocm_flow_has_no_ndw_download_and_other_entities(hass, mock_ocm):
     assert _entity(hass, "binary_sensor", "ocm-473176_any_available") is None
     status = hass.states.get(_entity(hass, "sensor", "ocm-473176-794706_status"))
     assert status.state == "operational"
+
+
+async def test_refresh_button_forces_a_new_check(hass, mock_ndw):
+    from custom_components.ndw_laadpalen.const import FEED_URL
+
+    await _add_ndw_location(hass, "NL-NUO-near")
+    button = _entity(hass, "button", "NL-NUO-near_refresh")
+    assert button is not None
+    assert er.async_get(hass).async_get(button).entity_category == "diagnostic"
+
+    feed_calls = lambda: sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL)  # noqa: E731
+    before = feed_calls()
+    # within the shared 60 s window a normal refresh would reuse the cache
+    await hass.services.async_call("button", "press", {"entity_id": button}, blocking=True)
+    await hass.async_block_till_done()
+    assert feed_calls() == before + 1

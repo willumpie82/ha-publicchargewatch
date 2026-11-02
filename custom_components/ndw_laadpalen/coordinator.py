@@ -47,6 +47,7 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ),
         )
         self._client = client
+        self._force = False
         self.location_id: str = entry.data[CONF_LOCATION_ID]
 
     @property
@@ -54,9 +55,17 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Only NDW knows whether a charge point is free or in use."""
         return self.source == SOURCE_NDW
 
+    async def async_force_refresh(self) -> None:
+        """Refresh now, bypassing the shared feed's minimum age (the refresh button)."""
+        self._force = True
+        await self.async_request_refresh()
+
     async def _async_update_data(self) -> dict[str, Any]:
+        force, self._force = self._force, False
         try:
-            locations = await self._client.async_get_locations({self.location_id})
+            locations = await self._client.async_get_locations(
+                {self.location_id}, force=force
+            )
         except OcmAuthError as err:
             raise ConfigEntryAuthFailed("Open Charge Map rejected the API key") from err
         except (aiohttp.ClientError, TimeoutError) as err:

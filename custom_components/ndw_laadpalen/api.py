@@ -82,12 +82,18 @@ class NdwFeed:
             find_nearby, raw, latitude, longitude, radius_m
         )
 
-    async def async_get_locations(self, ids: set[str]) -> dict[str, dict[str, Any]]:
-        """Current availability for the given location ids, with prices attached."""
+    async def async_get_locations(
+        self, ids: set[str], force: bool = False
+    ) -> dict[str, dict[str, Any]]:
+        """Current availability for the given location ids, with prices attached.
+
+        force skips the shared minimum age (manual refresh); the ETag still avoids
+        downloading an unchanged file.
+        """
         async with self._lock:
             self._wanted |= ids
             missing = ids - self._cache.keys()
-            if missing or time.monotonic() - self._fetched > MIN_FEED_AGE:
+            if missing or force or time.monotonic() - self._fetched > MIN_FEED_AGE:
                 result = await self._download(FEED_URL, None if missing else self._etag)
                 if result is not None:
                     raw, self._pending_etag = result

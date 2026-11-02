@@ -159,6 +159,11 @@
       "any_available": {
         "name": "Laadpunt beschikbaar"
       }
+    },
+    "button": {
+      "refresh": {
+        "name": "Verversen"
+      }
     }
   }
 }

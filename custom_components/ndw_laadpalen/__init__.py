@@ -15,7 +15,7 @@ from .const import CONF_API_KEY, CONF_SOURCE, DOMAIN, SOURCE_NDW, SOURCE_OCM
 from .coordinator import NdwCoordinator
 from .ocm import OcmClient
 
-PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
 type NdwConfigEntry = ConfigEntry[NdwCoordinator]
 

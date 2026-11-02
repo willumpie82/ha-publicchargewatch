@@ -159,6 +159,11 @@
       "any_available": {
         "name": "Charge point available"
       }
+    },
+    "button": {
+      "refresh": {
+        "name": "Refresh"
+      }
     }
   }
 }
