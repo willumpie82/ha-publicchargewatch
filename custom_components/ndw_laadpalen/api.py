@@ -37,8 +37,8 @@ class NdwFeed:
         self._hass = hass
         self._session = session
         self._lock = asyncio.Lock()
+        self._raw: bytes | None = None  # the feed behind _cache (~5 MB)
         self._etag: str | None = None
-        self._pending_etag: str | None = None
         self._fetched = 0.0
         self._wanted: set[str] = set()
         self._cache: dict[str, dict[str, Any]] = {}
@@ -83,25 +83,38 @@ class NdwFeed:
         )
 
     async def async_get_locations(
-        self, ids: set[str], force: bool = False
+        self, ids: set[str], force: bool = False, max_age: float | None = None
     ) -> dict[str, dict[str, Any]]:
         """Current availability for the given location ids, with prices attached.
 
-        force skips the shared minimum age (manual refresh); the ETag still avoids
-        downloading an unchanged file.
+        All NDW entries share one download: data younger than max_age is reused (the
+        coordinators pass most of their update interval, so entries whose timers are
+        offset still share it). force skips that (manual refresh); the ETag still avoids
+        downloading an unchanged file. The raw feed is kept, so a newly added location is
+        found without another download.
         """
         async with self._lock:
             self._wanted |= ids
-            missing = ids - self._cache.keys()
-            if missing or force or time.monotonic() - self._fetched > MIN_FEED_AGE:
-                result = await self._download(FEED_URL, None if missing else self._etag)
+            limit = MIN_FEED_AGE if max_age is None else max_age
+            stale = (
+                force
+                or self._raw is None
+                or time.monotonic() - self._fetched > limit
+            )
+            changed = False
+            if stale:
+                # the ETag belongs to the raw feed we hold; without it, download fully
+                result = await self._download(
+                    FEED_URL, self._etag if self._raw is not None else None
+                )
                 if result is not None:
-                    raw, self._pending_etag = result
-                    self._cache = await self._hass.async_add_executor_job(
-                        find_by_ids, raw, set(self._wanted)
-                    )
-                    self._etag = self._pending_etag
+                    self._raw, self._etag = result
+                    changed = True
                 self._fetched = time.monotonic()
+            if changed or ids - self._cache.keys():
+                self._cache = await self._hass.async_add_executor_job(
+                    find_by_ids, self._raw, set(self._wanted)
+                )
             # copies: prices are attached below and must not leak into the shared cache
             locations = {i: deepcopy(self._cache[i]) for i in ids if i in self._cache}
 

@@ -202,3 +202,30 @@ async def test_refresh_button_forces_a_new_check(hass, mock_ndw):
     await hass.services.async_call("button", "press", {"entity_id": button}, blocking=True)
     await hass.async_block_till_done()
     assert feed_calls() == before + 1
+
+
+async def test_entries_share_one_download(hass, mock_ndw):
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+    from custom_components.ndw_laadpalen.api import NdwFeed
+    from custom_components.ndw_laadpalen.const import FEED_URL
+
+    feed = NdwFeed(hass, async_get_clientsession(hass))
+    calls = lambda: sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL)  # noqa: E731
+
+    first = await feed.async_get_locations({"NL-NUO-near"}, max_age=240)
+    assert "NL-NUO-near" in first and calls() == 1
+    # a second location added later is found in the feed we already hold
+    second = await feed.async_get_locations({"NL-NUO-two"}, max_age=240)
+    assert "NL-NUO-two" in second and calls() == 1
+    # and a poll of the first within the window is served from memory
+    await feed.async_get_locations({"NL-NUO-near"}, max_age=240)
+    assert calls() == 1
+    # a window of 0 (data too old) and a forced refresh each check again
+    await feed.async_get_locations({"NL-NUO-near"}, max_age=0)
+    assert calls() == 2
+    await feed.async_get_locations({"NL-NUO-near"}, max_age=240, force=True)
+    assert calls() == 3
+    # the cache covers every wanted location after a re-download
+    both = await feed.async_get_locations({"NL-NUO-near", "NL-NUO-two"}, max_age=240)
+    assert set(both) == {"NL-NUO-near", "NL-NUO-two"} and calls() == 3

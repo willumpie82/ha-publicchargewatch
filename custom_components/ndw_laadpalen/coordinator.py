@@ -63,8 +63,12 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         force, self._force = self._force, False
         try:
+            # share a download with the other entries unless it is older than ~80% of
+            # our own interval (their timers are offset from ours)
             locations = await self._client.async_get_locations(
-                {self.location_id}, force=force
+                {self.location_id},
+                force=force,
+                max_age=0.8 * self.update_interval.total_seconds(),
             )
         except OcmAuthError as err:
             raise ConfigEntryAuthFailed("Open Charge Map rejected the API key") from err

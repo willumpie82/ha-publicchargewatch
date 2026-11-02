@@ -39,7 +39,8 @@ Settings → Devices & services → Add integration → "NDW Laadpalen".
 
 ## How it behaves
 - NDW feeds are streamed with `ijson` (never loaded whole), shared by all NDW entries
-  (at most one download per minute, skipped with HTTP 304 when unchanged).
+  (one download serves every entry within ~80% of the update interval, even when their
+  timers are offset; HTTP 304 when unchanged; the raw feed stays in memory, ~5 MB).
 - Tariffs are fetched at most once a day and stored, so a restart does not re-download them.
   If the tariff download fails the last known price stays and availability is unaffected.
 - OCM prices: "0.00 jaarabonnement" (84% of NL locations) is an import placeholder meaning

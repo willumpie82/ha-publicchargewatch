@@ -146,7 +146,10 @@ class OcmClient:
         return sorted(found, key=lambda loc: loc["distance"])
 
     async def async_get_locations(
-        self, ids: set[str], force: bool = False  # noqa: ARG002 - every call is fresh
+        self,
+        ids: set[str],
+        force: bool = False,  # noqa: ARG002 - every OCM call is fresh
+        max_age: float | None = None,  # noqa: ARG002
     ) -> dict[str, dict[str, Any]]:
         numeric = [i.removeprefix(ID_PREFIX) for i in ids]
         pois = await self._get(
