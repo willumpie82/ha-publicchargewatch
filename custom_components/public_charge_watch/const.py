@@ -22,8 +22,6 @@ OCM_API_URL = "https://openchargemap.org/site/develop/api"
 
 DEFAULT_RADIUS_M = 200
 MAX_RADIUS_M = 500
-# (default, minimum) update interval in seconds per source
-SCAN_INTERVALS = {SOURCE_NDW: (300, 120), SOURCE_OCM: (1800, 300)}
 MIN_FEED_AGE = 60  # seconds; NDW entries share one download within this window
 TARIFF_MAX_AGE = 24 * 3600  # tariffs change rarely: at most one download per day
 TARIFF_RETRY = 3600  # after a failed tariff download

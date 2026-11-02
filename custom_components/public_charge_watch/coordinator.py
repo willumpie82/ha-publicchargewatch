@@ -15,7 +15,6 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import NdwFeed
 from .const import (
     CONF_CONNECTORS,
     CONF_MIN_POWER,
@@ -27,12 +26,10 @@ from .const import (
     CONF_SOURCE,
     DOMAIN,
     CONF_LOCATION_IDS,
-    SCAN_INTERVALS,
     SUBENTRY_LOCATION,
-    SOURCE_NDW,
 )
 from .dynamic import pick
-from .ocm import OcmAuthError, OcmClient
+from .provider import Provider, ProviderAuthError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,10 +49,10 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     config_entry: ConfigEntry
 
     def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, client: NdwFeed | OcmClient
+        self, hass: HomeAssistant, entry: ConfigEntry, client: Provider
     ) -> None:
         self.source: str = entry.data[CONF_SOURCE]
-        default_interval, _ = SCAN_INTERVALS[self.source]
+        default_interval, _ = client.scan_interval
         super().__init__(
             hass,
             _LOGGER,
@@ -77,7 +74,7 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     @property
     def live_occupancy(self) -> bool:
         """Only NDW knows whether a charge point is free or in use."""
-        return self.source == SOURCE_NDW
+        return self._client.live_occupancy
 
     async def async_force_refresh(self) -> None:
         """Refresh now, bypassing the shared feed's minimum age (the refresh button)."""
@@ -97,8 +94,8 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 force=force,
                 max_age=0.8 * self.update_interval.total_seconds(),
             )
-        except OcmAuthError as err:
-            raise ConfigEntryAuthFailed("Open Charge Map rejected the API key") from err
+        except ProviderAuthError as err:
+            raise ConfigEntryAuthFailed(f"{self._client.name} rejected the credentials") from err
         except (aiohttp.ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error fetching charger data: {err}") from err
         if not locations:
@@ -129,9 +126,9 @@ class DynamicCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         entry: ConfigEntry,
         subentry: ConfigSubentry,
-        client: NdwFeed,
+        client: Provider,
     ) -> None:
-        default_interval, _ = SCAN_INTERVALS[SOURCE_NDW]
+        default_interval, _ = client.scan_interval
         super().__init__(
             hass,
             _LOGGER,

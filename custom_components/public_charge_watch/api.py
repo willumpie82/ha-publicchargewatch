@@ -26,13 +26,21 @@ from .const import (
 )
 from .ndw_tariff import scan_tariffs
 from .parser import find_by_ids, find_nearby
+from .provider import Provider
 
 _LOGGER = logging.getLogger(__name__)
 _TIMEOUT = aiohttp.ClientTimeout(total=180)
 
 
-class NdwFeed:
+class NdwFeed(Provider):
     """Shared client: one download serves every NDW config entry."""
+
+    provider_id = "ndw"
+    name = "NDW"
+    live_occupancy = True
+    bulk_download = True
+    city_from_geocoder = True  # the NDW feed has no town
+    scan_interval = (300, 120)
 
     def __init__(self, hass: HomeAssistant, session: aiohttp.ClientSession) -> None:
         self._hass = hass
@@ -88,6 +96,9 @@ class NdwFeed:
     def is_fresh(self, max_age: float) -> bool:
         """Whether the held feed is young enough to be used without downloading."""
         return self._raw is not None and time.monotonic() - self._fetched <= max_age
+
+    async def async_prepare(self, max_age: float | None = None) -> None:
+        await self.async_raw(max_age=max_age)
 
     async def async_raw(
         self, force: bool = False, max_age: float | None = None

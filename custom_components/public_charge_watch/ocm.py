@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .parser import distance_m
+from .provider import Provider, ProviderAuthError
 from .tariff import parse_usage_cost
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ STATUS_BY_ID = {
 }
 
 
-class OcmAuthError(Exception):
+class OcmAuthError(ProviderAuthError):
     """The API key was rejected."""
 
 
@@ -98,8 +99,14 @@ def parse_poi(poi: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-class OcmClient:
+class OcmClient(Provider):
     """Thin async client for the OCM poi endpoint."""
+
+    provider_id = "ocm"
+    name = "Open Charge Map"
+    live_occupancy = False
+    needs_api_key = True
+    scan_interval = (1800, 300)
 
     def __init__(self, session: aiohttp.ClientSession, api_key: str) -> None:
         self._session = session
@@ -125,7 +132,11 @@ class OcmClient:
         await self._get({"maxresults": 1, "countrycode": "NL"})
 
     async def async_nearby(
-        self, latitude: float, longitude: float, radius_m: float
+        self,
+        latitude: float,
+        longitude: float,
+        radius_m: float,
+        max_age: float | None = None,  # noqa: ARG002 - every OCM call is fresh
     ) -> list[dict[str, Any]]:
         pois = await self._get(
             {

@@ -27,6 +27,7 @@ from .const import (
 from .coordinator import DynamicCoordinator, NdwCoordinator, position_of
 from .ocm import OcmClient
 from .parser import distance_m
+from .provider import Provider
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -39,7 +40,7 @@ PLATFORMS = [
 type NdwConfigEntry = ConfigEntry[NdwCoordinator]
 
 
-def get_client(hass: HomeAssistant, data: Mapping[str, Any]) -> NdwFeed | OcmClient:
+def get_client(hass: HomeAssistant, data: Mapping[str, Any]) -> Provider:
     """Client for the source in data; NDW is shared by all entries."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     session = async_get_clientsession(hass)

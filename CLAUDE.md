@@ -14,6 +14,7 @@ is missing from the data.
 
 | File | Role |
 |---|---|
+| `provider.py`, `providers.py` | the interface every source implements (`Provider`: `async_nearby`, `async_get_locations`, capability flags like `live_occupancy`, `bulk_download`, `scan_interval`), its errors, and the registry of providers by id. `NdwFeed` (`api.py`) and `OcmClient` (`ocm.py`) are the two providers; new sources subclass `Provider` and are added to `PROVIDERS`. Code must ask a provider for a capability, never compare source names |
 | `parser.py`, `ndw_tariff.py`, `tariff.py`, `ocm.py`, `geocode.py` | Home-Assistant-free logic (also used by `scripts/`) |
 | `api.py` | `NdwFeed`: shared NDW download (raw feed kept in memory, ETag, lock) + daily tariff download persisted in a `Store` |
 | `coordinator.py` | polling, `iter_locations(entry)`, force refresh, `last_success` |

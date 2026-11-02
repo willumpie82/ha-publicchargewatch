@@ -51,7 +51,6 @@ from homeassistant.helpers.selector import (
 )
 
 from . import NdwConfigEntry, get_client
-from .api import _attach_price
 from .const import (
     CONF_API_KEY,
     CONF_CONNECTORS,
@@ -76,14 +75,14 @@ from .const import (
     MAX_DYNAMIC_RADIUS_M,
     MAX_RADIUS_M,
     OCM_API_URL,
-    SCAN_INTERVALS,
     SOURCE_NDW,
     SOURCE_OCM,
     SUBENTRY_DYNAMIC,
     SUBENTRY_LOCATION,
 )
 from .geocode import async_geocode_postcode, async_reverse_city, normalize_postcode
-from .ocm import OcmAuthError
+from .provider import ProviderAuthError
+from .providers import PROVIDERS
 from .parser import CONNECTOR_NAMES
 
 _NETWORK_ERRORS = (aiohttp.ClientError, TimeoutError)
@@ -196,7 +195,7 @@ class _LocationSearch:
         """Town of a location; NDW has none in its feed, so ask the PDOK geocoder."""
         if city := loc.get("city"):
             return city
-        if self._source != SOURCE_NDW:
+        if not PROVIDERS[self._source].city_from_geocoder:
             return None  # the geocoder only knows the Netherlands
         try:
             return await async_reverse_city(
@@ -219,7 +218,7 @@ class _LocationSearch:
         """Download the NDW feed (progress screen)."""
         if self._task is None:
             self._task = self.hass.async_create_task(
-                get_client(self.hass, self._client_data).async_raw(
+                get_client(self.hass, self._client_data).async_prepare(
                     max_age=_FLOW_FEED_AGE
                 )
             )
@@ -332,22 +331,14 @@ class _LocationSearch:
     async def _run_search(self) -> list[dict[str, Any]]:
         assert self._search is not None
         client = get_client(self.hass, self._client_data)
-        if self._source == SOURCE_NDW:
-            found = await client.async_nearby(*self._search, max_age=_FLOW_FEED_AGE)
-            tariffs = await client.async_get_tariffs(
-                {t for loc in found for g in loc["groups"] for t in g["tariff_ids"]}
-            )
-            for loc in found:
-                _attach_price(loc, tariffs)
-            return found
-        return await client.async_nearby(*self._search)
+        return await client.async_nearby_live(*self._search, max_age=_FLOW_FEED_AGE)
 
     async def async_step_search(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if (
             self._task is None
-            and self._source == SOURCE_NDW
+            and PROVIDERS[self._source].bulk_download
             and not get_client(self.hass, self._client_data).is_fresh(_FLOW_FEED_AGE)
         ):
             # the held feed is too old: show the download as its own progress step
@@ -362,7 +353,7 @@ class _LocationSearch:
         task, self._task = self._task, None
         try:
             found = task.result()
-        except OcmAuthError:
+        except ProviderAuthError:
             return self._fail("invalid_auth", self._auth_step)
         except _NETWORK_ERRORS:
             return self._fail("cannot_connect", "location_method")
@@ -450,7 +441,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
         types: dict[str, type[ConfigSubentryFlow]] = {SUBENTRY_LOCATION: LocationSubentryFlow}
-        if config_entry.data.get(CONF_SOURCE) == SOURCE_NDW:  # needs live data from the feed
+        if PROVIDERS[config_entry.data.get(CONF_SOURCE, SOURCE_NDW)].live_occupancy:  # needs live data
             types[SUBENTRY_DYNAMIC] = DynamicSubentryFlow
         return types
 
@@ -463,11 +454,11 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
             self._source = user_input[CONF_SOURCE]
             await self.async_set_unique_id(self._source)
             self._abort_if_unique_id_configured()  # add locations to that entry instead
-            if self._source == SOURCE_OCM:
+            if PROVIDERS[self._source].needs_api_key:
                 return await self.async_step_api_key()
             return await self.async_step_ndw_confirm()
         configured = {e.unique_id for e in self._async_current_entries()}
-        options = [s for s in (SOURCE_NDW, SOURCE_OCM) if s not in configured]
+        options = [s for s in PROVIDERS if s not in configured]
         if not options:
             return self.async_abort(reason="already_configured")
         schema = vol.Schema(
@@ -493,7 +484,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
             self._api_key = user_input[CONF_API_KEY].strip()
             try:
                 await get_client(self.hass, self._client_data).async_validate()
-            except OcmAuthError:
+            except ProviderAuthError:
                 errors["base"] = "invalid_auth"
             except _NETWORK_ERRORS:
                 errors["base"] = "cannot_connect"
@@ -519,7 +510,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
         self._places_chosen = await self._group_by_place(locs)
         return await (
             self.async_step_interval_ndw()
-            if self._source == SOURCE_NDW
+            if PROVIDERS[self._source].bulk_download
             else self.async_step_interval_ocm()
         )
 
@@ -539,13 +530,13 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
         self, step_id: str, user_input: dict[str, Any] | None
     ) -> ConfigFlowResult:
         assert self._places_chosen
-        default, minimum = SCAN_INTERVALS[self._source]
+        default, minimum = PROVIDERS[self._source].scan_interval
         if user_input is not None:
             data = {CONF_SOURCE: self._source}
-            if self._source == SOURCE_OCM:
+            if PROVIDERS[self._source].needs_api_key:
                 data[CONF_API_KEY] = self._api_key
             return self.async_create_entry(
-                title="NDW" if self._source == SOURCE_NDW else "Open Charge Map",
+                title=PROVIDERS[self._source].name,
                 data=data,
                 options={CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])},
                 subentries=[
@@ -582,7 +573,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
                 await get_client(
                     self.hass, {CONF_SOURCE: SOURCE_OCM, CONF_API_KEY: key}
                 ).async_validate()
-            except OcmAuthError:
+            except ProviderAuthError:
                 errors["base"] = "invalid_auth"
             except _NETWORK_ERRORS:
                 errors["base"] = "cannot_connect"
@@ -621,7 +612,7 @@ class NdwOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         source = self.config_entry.data.get(CONF_SOURCE, SOURCE_NDW)
-        default, minimum = SCAN_INTERVALS[source]
+        default, minimum = PROVIDERS[source].scan_interval
         if user_input is not None:
             return self.async_create_entry(
                 data={CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])}
