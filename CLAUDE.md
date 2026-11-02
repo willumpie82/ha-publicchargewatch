@@ -1,7 +1,7 @@
 # PublicChargeWatch — contributor notes
 
 Home Assistant custom integration (HACS) showing public EV chargers as devices. Domain
-`public_charge_watch`, code in `custom_components/public_charge_watch/`. User docs are in `README.md`; this
+`public_charge_watch`, code in `custom_components/public_charge_watch/`. User docs are in `README.md` and `docs/` (setup, entities, dynamic, examples, development); this
 file is what you need to change the code safely.
 
 ## Structure
