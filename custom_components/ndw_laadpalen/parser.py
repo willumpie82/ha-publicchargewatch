@@ -9,7 +9,9 @@ from __future__ import annotations
 from collections.abc import Callable
 import gzip
 import io
+import json
 import math
+import re
 from typing import Any
 
 import ijson
@@ -99,29 +101,79 @@ def slim_feature(feature: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+# Every feature starts like this in the real feed; matching it is far cheaper than building
+# Python objects for all ~82k features, so only the matches are parsed as JSON.
+_FEATURE_START = re.compile(
+    rb'\{"id":"([^"\\]*)","type":"Feature","geometry":\{"type":"Point",'
+    rb'"coordinates":\[(-?[\d.]+),(-?[\d.]+)'
+)
+_COLLECTION_END = b'],"type":"FeatureCollection"'
+
+
+def _scan_fast(
+    data: bytes,
+    keep_coords: Callable[[float, float], bool] | None,
+    keep_id: Callable[[str], bool] | None,
+) -> dict[str, dict[str, Any]] | None:
+    """Regex pre-filter over the unpacked feed; None if the feed has another layout."""
+    starts = list(_FEATURE_START.finditer(data))
+    if not starts:
+        return None
+    end_of_all = data.rfind(_COLLECTION_END)
+    if end_of_all < 0:
+        return None
+    found: dict[str, dict[str, Any]] = {}
+    for index, match in enumerate(starts):
+        fid = match.group(1).decode()
+        if keep_id is not None and not keep_id(fid):
+            continue
+        if keep_coords is not None and not keep_coords(
+            float(match.group(3)), float(match.group(2))
+        ):
+            continue
+        end = starts[index + 1].start() if index + 1 < len(starts) else end_of_all
+        try:
+            feature = json.loads(data[match.start() : end].rstrip(b", "))
+        except ValueError:
+            return None  # unexpected layout: let the streaming parser decide
+        if (slim := slim_feature(feature)) is not None:
+            found[slim["id"]] = slim
+    return found
+
+
 def scan(
     raw: bytes,
     keep_coords: Callable[[float, float], bool] | None = None,
     keep_id: Callable[[str], bool] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Stream the gzipped feed and return slimmed locations passing the filters.
+    """Return slimmed locations passing the filters from the gzipped feed.
 
-    Filters run on the raw feature first, so the ~81k non-matching features are cheap.
+    The filters run before a feature is parsed, so the non-matching ones are cheap.
     """
+    data = gzip.decompress(raw)
+    if (found := _scan_fast(data, keep_coords, keep_id)) is not None:
+        return found
+    return _scan_stream(data, keep_coords, keep_id)  # layout changed: slower but robust
+
+
+def _scan_stream(
+    data: bytes,
+    keep_coords: Callable[[float, float], bool] | None,
+    keep_id: Callable[[str], bool] | None,
+) -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
-    with gzip.GzipFile(fileobj=io.BytesIO(raw)) as stream:
-        for feature in ijson.items(stream, "features.item", use_float=True):
-            if keep_id is not None and not keep_id(feature.get("id")):
+    for feature in ijson.items(io.BytesIO(data), "features.item", use_float=True):
+        if keep_id is not None and not keep_id(feature.get("id")):
+            continue
+        if keep_coords is not None:
+            try:
+                lon, lat = feature["geometry"]["coordinates"][:2]
+            except (KeyError, TypeError, ValueError):
                 continue
-            if keep_coords is not None:
-                try:
-                    lon, lat = feature["geometry"]["coordinates"][:2]
-                except (KeyError, TypeError, ValueError):
-                    continue
-                if not keep_coords(float(lat), float(lon)):
-                    continue
-            if (slim := slim_feature(feature)) is not None:
-                found[slim["id"]] = slim
+            if not keep_coords(float(lat), float(lon)):
+                continue
+        if (slim := slim_feature(feature)) is not None:
+            found[slim["id"]] = slim
     return found
 
 
