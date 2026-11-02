@@ -12,6 +12,7 @@ map) -> search (progress) -> pick a charger -> update interval.
 from __future__ import annotations
 
 import asyncio
+from types import MappingProxyType
 from collections.abc import Mapping
 from typing import Any
 
@@ -22,14 +23,17 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    ConfigSubentry,
     ConfigSubentryData,
     ConfigSubentryFlow,
     OptionsFlow,
     SubentryFlowResult,
 )
+from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     LocationSelector,
@@ -50,29 +54,37 @@ from . import NdwConfigEntry, get_client
 from .api import _attach_price
 from .const import (
     CONF_API_KEY,
+    CONF_CONNECTORS,
     CONF_HOUSE_NUMBER,
     CONF_LOCATION,
     CONF_CITY,
     CONF_LOCATION_ID,
     CONF_LOCATION_IDS,
+    CONF_MIN_POWER,
     CONF_NOTIFY,
     CONF_NOTIFY_ENTITY,
+    CONF_ONLY_AVAILABLE,
     CONF_POSTCODE,
     CONF_RADIUS,
     CONF_SCAN_INTERVAL,
     CONF_SOURCE,
+    CONF_TRACKED,
     CONF_ZONE,
+    DEFAULT_DYNAMIC_RADIUS_M,
     DEFAULT_RADIUS_M,
     DOMAIN,
+    MAX_DYNAMIC_RADIUS_M,
     MAX_RADIUS_M,
     OCM_API_URL,
     SCAN_INTERVALS,
     SOURCE_NDW,
     SOURCE_OCM,
+    SUBENTRY_DYNAMIC,
     SUBENTRY_LOCATION,
 )
 from .geocode import async_geocode_postcode, async_reverse_city, normalize_postcode
 from .ocm import OcmAuthError
+from .parser import CONNECTOR_NAMES
 
 _NETWORK_ERRORS = (aiohttp.ClientError, TimeoutError)
 
@@ -167,8 +179,18 @@ class _LocationSearch:
             return f"\n\n_{self._hidden} al toegevoegde laadlocatie(s) staan niet in de lijst._"
         return f"\n\n_{self._hidden} already added location(s) are not listed._"
 
-    async def _location_chosen(self, loc: dict[str, Any]) -> Any:
+    async def _locations_chosen(self, locs: list[dict[str, Any]]) -> Any:
         raise NotImplementedError
+
+    async def _group_by_place(
+        self, locs: list[dict[str, Any]]
+    ) -> dict[str, tuple[str | None, list[str]]]:
+        """Chosen locations grouped per place: {place key: (town, location ids)}."""
+        groups: dict[str, tuple[str | None, list[str]]] = {}
+        for loc in locs:
+            city = await self._place_of(loc)
+            groups.setdefault(_place_key(city), (city, []))[1].append(loc["id"])
+        return groups
 
     async def _place_of(self, loc: dict[str, Any]) -> str | None:
         """Town of a location; NDW has none in its feed, so ask the PDOK geocoder."""
@@ -375,10 +397,13 @@ class _LocationSearch:
     ) -> ConfigFlowResult:
         # After a progress screen HA hands this step the previous form's input, so only
         # react to our own field.
-        if user_input is not None and CONF_LOCATION_ID in user_input:
-            return await self._location_chosen(
-                self._candidates[user_input[CONF_LOCATION_ID]]
-            )
+        errors: dict[str, str] = {}
+        if user_input is not None and CONF_LOCATION_IDS in user_input:
+            if chosen := user_input[CONF_LOCATION_IDS]:
+                return await self._locations_chosen(
+                    [self._candidates[i] for i in chosen]
+                )
+            errors["base"] = "no_selection"
 
         options = [
             SelectOptionDict(value=c["id"], label=_describe(c))
@@ -386,14 +411,17 @@ class _LocationSearch:
         ]
         schema = vol.Schema(
             {
-                vol.Required(CONF_LOCATION_ID, default=options[0]["value"]): SelectSelector(
-                    SelectSelectorConfig(options=options, mode=SelectSelectorMode.LIST)
+                vol.Required(CONF_LOCATION_IDS, default=[]): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options, multiple=True, mode=SelectSelectorMode.LIST
+                    )
                 )
             }
         )
         return self.async_show_form(
             step_id="select",
             data_schema=schema,
+            errors=errors,
             description_placeholders={
                 "hidden": self._hidden_note()
             },
@@ -408,8 +436,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._init_search(SOURCE_NDW, None)
-        self._selected: dict[str, Any] | None = None
-        self._city: str | None = None
+        self._places_chosen: dict[str, tuple[str | None, list[str]]] = {}
 
     @staticmethod
     @callback
@@ -421,7 +448,10 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
-        return {SUBENTRY_LOCATION: LocationSubentryFlow}
+        types: dict[str, type[ConfigSubentryFlow]] = {SUBENTRY_LOCATION: LocationSubentryFlow}
+        if config_entry.data.get(CONF_SOURCE) == SOURCE_NDW:  # needs live data from the feed
+            types[SUBENTRY_DYNAMIC] = DynamicSubentryFlow
+        return types
 
     # --- 1. source -----------------------------------------------------------------
 
@@ -484,9 +514,8 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
             step_id="ndw_confirm", menu_options=["fetch", "user"]
         )
 
-    async def _location_chosen(self, loc: dict[str, Any]) -> ConfigFlowResult:
-        self._selected = loc
-        self._city = await self._place_of(loc)
+    async def _locations_chosen(self, locs: list[dict[str, Any]]) -> ConfigFlowResult:
+        self._places_chosen = await self._group_by_place(locs)
         return await (
             self.async_step_interval_ndw()
             if self._source == SOURCE_NDW
@@ -508,7 +537,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
     async def _interval_step(
         self, step_id: str, user_input: dict[str, Any] | None
     ) -> ConfigFlowResult:
-        assert self._selected is not None
+        assert self._places_chosen
         default, minimum = SCAN_INTERVALS[self._source]
         if user_input is not None:
             data = {CONF_SOURCE: self._source}
@@ -521,10 +550,11 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
                 subentries=[
                     ConfigSubentryData(
                         subentry_type=SUBENTRY_LOCATION,
-                        title=self._city or "Other",
-                        data=_place_data(self._city, [self._selected["id"]]),
-                        unique_id=_place_key(self._city),
+                        title=city or "Other",
+                        data=_place_data(city, ids),
+                        unique_id=key,
                     )
+                    for key, (city, ids) in self._places_chosen.items()
                 ],
             )
         return self.async_show_form(
@@ -622,29 +652,40 @@ class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
             if sub.subentry_type == SUBENTRY_LOCATION
         ]
 
-    async def _location_chosen(self, loc: dict[str, Any]) -> SubentryFlowResult:
-        """Add the charger to the place it is in, or start a new place."""
-        city = await self._place_of(loc)
-        key = _place_key(city)
+    async def _locations_chosen(self, locs: list[dict[str, Any]]) -> SubentryFlowResult:
+        """Add each charger to the place it is in, or start a new place."""
+        groups = await self._group_by_place(locs)
         entry = self._get_entry()
-        for place in self._places():
-            if place.unique_id == key:
+        existing = {place.unique_id: place for place in self._places()}
+        new = {k: v for k, v in groups.items() if k not in existing}
+        if len(groups) == 1 and len(new) == 1:
+            (key, (city, ids)), = new.items()
+            return self.async_create_entry(
+                title=city or "Other", data=_place_data(city, ids), unique_id=key
+            )
+        for key, (city, ids) in groups.items():
+            if place := existing.get(key):
                 self.hass.config_entries.async_update_subentry(
                     entry,
                     place,
                     data={
                         **place.data,
-                        CONF_LOCATION_IDS: [*place.data[CONF_LOCATION_IDS], loc["id"]],
+                        CONF_LOCATION_IDS: [*place.data[CONF_LOCATION_IDS], *ids],
                     },
                 )
-                return self.async_abort(
-                    reason="location_added",
-                    description_placeholders={"place": place.title},
+            else:
+                self.hass.config_entries.async_add_subentry(
+                    entry,
+                    ConfigSubentry(
+                        data=MappingProxyType(_place_data(city, ids)),
+                        subentry_type=SUBENTRY_LOCATION,
+                        title=city or "Other",
+                        unique_id=key,
+                    ),
                 )
-        return self.async_create_entry(
-            title=city or "Other",
-            data=_place_data(city, [loc["id"]]),
-            unique_id=key,
+        names = ", ".join(city or "Other" for city, _ in groups.values())
+        return self.async_abort(
+            reason="location_added", description_placeholders={"place": names}
         )
 
     # --- reconfigure: choose a notify entity per location ---------------------------
@@ -701,3 +742,85 @@ class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
             }
         )
         return self.async_show_form(step_id="notify", data_schema=schema)
+
+
+class DynamicSubentryFlow(ConfigSubentryFlow):
+    """"Add dynamic charging location": the charger nearest to a tracked entity."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        if user_input is not None:
+            name, data = user_input[CONF_NAME], {
+                k: v for k, v in user_input.items() if k != CONF_NAME
+            }
+            data[CONF_RADIUS] = int(data[CONF_RADIUS])
+            return self.async_create_entry(title=name, data=data)
+        return self.async_show_form(step_id="user", data_schema=_dynamic_schema({}, None))
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        subentry = self._get_reconfigure_subentry()
+        if user_input is not None:
+            name, data = user_input[CONF_NAME], {
+                k: v for k, v in user_input.items() if k != CONF_NAME
+            }
+            data[CONF_RADIUS] = int(data[CONF_RADIUS])
+            return self.async_update_and_abort(
+                self._get_entry(), subentry, title=name, data=data
+            )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_dynamic_schema(dict(subentry.data), subentry.title),
+        )
+
+
+def _dynamic_schema(current: dict[str, Any], title: str | None) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(CONF_NAME, default=title or "Nearest charger"): TextSelector(),
+            vol.Required(
+                CONF_TRACKED, default=current.get(CONF_TRACKED, vol.UNDEFINED)
+            ): EntitySelector(
+                EntitySelectorConfig(domain=["person", "device_tracker", "zone"])
+            ),
+            vol.Required(
+                CONF_RADIUS, default=current.get(CONF_RADIUS, DEFAULT_DYNAMIC_RADIUS_M)
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=250,
+                    max=MAX_DYNAMIC_RADIUS_M,
+                    step=250,
+                    unit_of_measurement="m",
+                    mode=NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Required(
+                CONF_CONNECTORS,
+                default=current.get(CONF_CONNECTORS, ["IEC_62196_T2", "IEC_62196_T2_COMBO"]),
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[
+                        SelectOptionDict(value=k, label=v) for k, v in CONNECTOR_NAMES.items()
+                    ],
+                    multiple=True,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Required(
+                CONF_MIN_POWER, default=current.get(CONF_MIN_POWER, 0)
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0,
+                    max=350,
+                    step=1,
+                    unit_of_measurement="kW",
+                    mode=NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Required(
+                CONF_ONLY_AVAILABLE, default=current.get(CONF_ONLY_AVAILABLE, True)
+            ): BooleanSelector(),
+        }
+    )

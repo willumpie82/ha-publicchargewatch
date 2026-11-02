@@ -60,10 +60,10 @@
         "description": "Press Submit to try again."
       },
       "select": {
-        "title": "Choose a charging location",
+        "title": "Choose charging locations",
         "description": "Sorted by distance, with current availability, power and price when known. {hidden}",
         "data": {
-          "location_id": "Charging location"
+          "location_ids": "Charging locations"
         }
       },
       "interval_ndw": {
@@ -98,7 +98,8 @@
       "no_locations": "No charging locations found in this area. Increase the radius or pick another place.",
       "postcode_invalid": "That is not a valid Dutch postcode (for example 5223 HS).",
       "postcode_not_found": "Postcode not found.",
-      "zone_not_found": "This zone has no location."
+      "zone_not_found": "This zone has no location.",
+      "no_selection": "Select at least one charging location."
     },
     "abort": {
       "already_configured": "This source is already set up. Add locations with ‘Add charging location’ on that entry.",
@@ -158,6 +159,9 @@
       },
       "last_checked": {
         "name": "Last update"
+      },
+      "nearest": {
+        "name": "Nearest charger"
       }
     },
     "binary_sensor": {
@@ -181,6 +185,21 @@
             }
           }
         }
+      },
+      "nearest": {
+        "name": "Nearest charger",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "nearest_changed": "Better charger nearby"
+            }
+          }
+        }
+      }
+    },
+    "device_tracker": {
+      "nearest": {
+        "name": "Nearest charger"
       }
     }
   },
@@ -228,10 +247,10 @@
           "description": "Press Submit to try again."
         },
         "select": {
-          "title": "Choose a charging location",
+          "title": "Choose charging locations",
           "description": "Sorted by distance, with current availability, power and price when known. {hidden}",
           "data": {
-            "location_id": "Charging location"
+            "location_ids": "Charging locations"
           }
         },
         "reconfigure": {
@@ -258,12 +277,48 @@
         "no_locations": "No charging locations found in this area. Increase the radius or pick another place.",
         "postcode_invalid": "That is not a valid Dutch postcode (for example 5223 HS).",
         "postcode_not_found": "Postcode not found.",
-        "zone_not_found": "This zone has no location."
+        "zone_not_found": "This zone has no location.",
+        "no_selection": "Select at least one charging location."
       },
       "abort": {
         "already_configured": "This location is already added.",
         "cannot_connect": "Could not fetch the NDW data.",
-        "location_added": "{place} already existed: the charging location was added to it.",
+        "location_added": "{place}: the charging locations were added.",
+        "reconfigure_successful": "Saved."
+      }
+    },
+    "dynamic": {
+      "initiate_flow": {
+        "user": "Add dynamic charging location"
+      },
+      "entry_type": "Dynamic",
+      "step": {
+        "user": {
+          "title": "Dynamic charging location",
+          "description": "Follows a person or device tracker and always shows the nearest charger that has a suitable plug and a free charge point: as a sensor, an event and a location tracker you can navigate to.",
+          "data": {
+            "name": "Name",
+            "tracked_entity": "Follow this entity",
+            "radius": "Search radius",
+            "connector_types": "Plug types",
+            "min_power_kw": "Minimum power",
+            "only_available": "Only chargers with a free charge point"
+          }
+        },
+        "reconfigure": {
+          "title": "Dynamic charging location",
+          "description": "Follows a person or device tracker and always shows the nearest charger that has a suitable plug and a free charge point: as a sensor, an event and a location tracker you can navigate to.",
+          "data": {
+            "name": "Name",
+            "tracked_entity": "Follow this entity",
+            "radius": "Search radius",
+            "connector_types": "Plug types",
+            "min_power_kw": "Minimum power",
+            "only_available": "Only chargers with a free charge point"
+          }
+        }
+      },
+      "abort": {
         "reconfigure_successful": "Saved."
       }
     }

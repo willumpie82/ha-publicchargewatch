@@ -8,8 +8,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import NdwConfigEntry
 from .const import CONF_NOTIFY
-from .coordinator import NdwCoordinator, iter_locations
-from .entity import NdwLocationEntity
+from .coordinator import DynamicCoordinator, NdwCoordinator, iter_locations
+from .entity import DynamicEntity, NdwLocationEntity
 
 BECAME_AVAILABLE = "became_available"
 BECAME_OCCUPIED = "became_occupied"
@@ -19,6 +19,10 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: NdwConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
+    for subentry_id, dynamic in coordinator.dynamic.items():
+        async_add_entities(
+            [NdwNearestEvent(dynamic, subentry_id)], config_subentry_id=subentry_id
+        )
     if not coordinator.live_occupancy:
         return
     for subentry_id, location_id in iter_locations(entry):
@@ -79,4 +83,31 @@ class NdwAvailabilityEvent(NdwLocationEntity, EventEntity):
             )
         if free is not None:
             self._free = free
+        super()._handle_coordinator_update()
+
+
+NEAREST_CHANGED = "nearest_changed"
+
+
+class NdwNearestEvent(DynamicEntity, EventEntity):
+    """Fires when a different charger with a free charge point becomes the best one."""
+
+    _attr_translation_key = "nearest"
+    _attr_event_types = [NEAREST_CHANGED]
+
+    def __init__(self, coordinator: DynamicCoordinator, subentry_id: str) -> None:
+        super().__init__(coordinator, subentry_id)
+        self._attr_unique_id = f"{subentry_id}_nearest_event"
+        self._last = self._free_best_id()
+
+    def _free_best_id(self) -> str | None:
+        best = self.best
+        return best["id"] if best and best["free"] > 0 else None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        current = self._free_best_id()
+        if current is not None and current != self._last:
+            self._trigger_event(NEAREST_CHANGED, self.best_attributes)
+        self._last = current
         super()._handle_coordinator_update()

@@ -8,7 +8,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import NdwCoordinator
+from .coordinator import DynamicCoordinator, NdwCoordinator
 
 
 class NdwLocationEntity(CoordinatorEntity[NdwCoordinator]):
@@ -62,3 +62,31 @@ class NdwEvseEntity(NdwLocationEntity):
     @property
     def available(self) -> bool:
         return super().available and self.evse is not None
+
+
+class DynamicEntity(CoordinatorEntity[DynamicCoordinator]):
+    """Entity of a dynamic charging location (the charger nearest to a tracked entity)."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator: DynamicCoordinator, subentry_id: str) -> None:
+        super().__init__(coordinator)
+        self._subentry_id = subentry_id
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"dynamic_{subentry_id}")},
+            name=coordinator.subentry.title,
+            model="Dynamic charging location",
+        )
+
+    @property
+    def best(self) -> dict[str, Any] | None:
+        results = self.coordinator.data["results"]
+        return results[0] if results else None
+
+    @property
+    def best_attributes(self) -> dict[str, Any]:
+        """The nearest charger as attributes, without coordinates (the tracker has those)."""
+        best = self.best
+        if best is None:
+            return {}
+        return {k: v for k, v in best.items() if k not in ("latitude", "longitude")}

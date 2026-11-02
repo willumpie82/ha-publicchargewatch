@@ -13,8 +13,8 @@ from homeassistant.util import dt as dt_util
 
 from . import NdwConfigEntry
 from .const import EVSE_STATUSES
-from .coordinator import NdwCoordinator, iter_locations
-from .entity import NdwEvseEntity, NdwLocationEntity
+from .coordinator import DynamicCoordinator, NdwCoordinator, iter_locations
+from .entity import DynamicEntity, NdwEvseEntity, NdwLocationEntity
 from .parser import group_label
 
 
@@ -22,6 +22,10 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: NdwConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
+    for subentry_id, dynamic in coordinator.dynamic.items():
+        async_add_entities(
+            [NdwNearestSensor(dynamic, subentry_id)], config_subentry_id=subentry_id
+        )
     for subentry_id, location_id in iter_locations(entry):
         _setup_location(entry, coordinator, location_id, subentry_id, async_add_entities)
 
@@ -285,3 +289,28 @@ class NdwCheckedSensor(NdwLocationEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {"last_update_ok": self.coordinator.last_update_success}
+
+
+class NdwNearestSensor(DynamicEntity, SensorEntity):
+    """Address of the best charger around the tracked entity; the details are attributes."""
+
+    _attr_translation_key = "nearest"
+
+    def __init__(self, coordinator: DynamicCoordinator, subentry_id: str) -> None:
+        super().__init__(coordinator, subentry_id)
+        self._attr_unique_id = f"{subentry_id}_nearest"
+
+    @property
+    def native_value(self) -> str | None:
+        best = self.best
+        return best["address"] if best else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            **self.best_attributes,
+            "results": [
+                {k: v for k, v in r.items() if k not in ("latitude", "longitude")}
+                for r in self.coordinator.data["results"]
+            ],
+        }

@@ -47,3 +47,15 @@ CONF_CITY = "city"
 CONF_LOCATION_IDS = "location_ids"
 CONF_NOTIFY = "notify_entities"  # {location_id: entity_id} that gates availability events
 CONF_NOTIFY_ENTITY = "notify_entity"
+
+# Dynamic charging location: the charger nearest to a tracked entity (NDW only)
+SUBENTRY_DYNAMIC = "dynamic"
+CONF_TRACKED = "tracked_entity"
+CONF_CONNECTORS = "connector_types"  # NDW connector_type values; empty = any
+CONF_MIN_POWER = "min_power_kw"
+CONF_ONLY_AVAILABLE = "only_available"
+DEFAULT_DYNAMIC_RADIUS_M = 1500
+MAX_DYNAMIC_RADIUS_M = 10_000
+DYNAMIC_RESULTS = 3  # chargers listed in the sensor attributes
+DYNAMIC_MOVE_M = 150  # recompute when the tracked entity moved this far
+TARIFF_LAZY_AGE = 3600  # new locations met while moving may trigger a tariff download this often

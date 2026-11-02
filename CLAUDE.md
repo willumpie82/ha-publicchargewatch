@@ -19,6 +19,7 @@ is missing from the data.
 | `coordinator.py` | polling, `iter_locations(entry)`, force refresh, `last_success` |
 | `config_flow.py` | `_LocationSearch` mixin (search steps) shared by `NdwConfigFlow` and `LocationSubentryFlow`; options flow = update interval |
 | `sensor.py` `binary_sensor.py` `button.py` `entity.py` | entities, created from the data a location actually has |
+| `dynamic.py`, `DynamicCoordinator` | dynamic charging location (subentry type `dynamic`, NDW only): `pick()` ranks nearby chargers by plug / power / free; the coordinator follows a tracked entity (state listener in `__init__.py`, recompute after ~150 m); sensor, `device_tracker` and event entities live on its own device (`dynamic_<subentry_id>`) |
 
 ## Data sources (the non-obvious parts)
 - **NDW** (NL only, live availability per connector group, exact tariffs): GeoJSON

@@ -9,15 +9,21 @@ from typing import Any
 
 import aiohttp
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import NdwFeed
 from .const import (
+    CONF_CONNECTORS,
+    CONF_MIN_POWER,
+    CONF_ONLY_AVAILABLE,
+    CONF_RADIUS,
     CONF_SCAN_INTERVAL,
+    CONF_TRACKED,
+    DYNAMIC_RESULTS,
     CONF_SOURCE,
     DOMAIN,
     CONF_LOCATION_IDS,
@@ -25,6 +31,7 @@ from .const import (
     SUBENTRY_LOCATION,
     SOURCE_NDW,
 )
+from .dynamic import pick
 from .ocm import OcmAuthError, OcmClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,6 +68,7 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._client = client
         self._force = False
         self.last_success: datetime | None = None
+        self.dynamic: dict[str, DynamicCoordinator] = {}  # by subentry id
 
     @property
     def location_ids(self) -> set[str]:
@@ -97,3 +105,71 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             raise UpdateFailed(f"No location found in {self.source} data")
         self.last_success = dt_util.utcnow()
         return locations  # a missing location only makes its own entities unavailable
+
+
+def position_of(state: State | None) -> tuple[float, float] | None:
+    """(latitude, longitude) of a person / device tracker / zone state, if it has one."""
+    if state is None:
+        return None
+    try:
+        return float(state.attributes["latitude"]), float(state.attributes["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+class DynamicCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """The best chargers around a tracked entity: {"position": (lat, lon) | None, "results": [...]}.
+
+    Runs on the entry's interval, and again when the tracked entity has moved (see
+    __init__.py). It searches the NDW feed the entry already holds, so moving costs no download.
+    """
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        subentry: ConfigSubentry,
+        client: NdwFeed,
+    ) -> None:
+        default_interval, _ = SCAN_INTERVALS[SOURCE_NDW]
+        super().__init__(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN} {subentry.title}",
+            update_interval=timedelta(
+                seconds=entry.options.get(CONF_SCAN_INTERVAL, default_interval)
+            ),
+        )
+        self.subentry = subentry
+        self._client = client
+        self.position: tuple[float, float] | None = None  # where the data was computed
+
+    @property
+    def tracked_entity(self) -> str:
+        return self.subentry.data[CONF_TRACKED]
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        data = self.subentry.data
+        position = position_of(self.hass.states.get(self.tracked_entity))
+        self.position = position
+        if position is None:  # unknown / unavailable: show no charger rather than a stale one
+            return {"position": None, "results": []}
+        try:
+            locations = await self._client.async_nearby_live(
+                *position,
+                data[CONF_RADIUS],
+                max_age=0.8 * self.update_interval.total_seconds(),
+            )
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise UpdateFailed(f"Error fetching charger data: {err}") from err
+        return {
+            "position": position,
+            "results": pick(
+                locations,
+                list(data.get(CONF_CONNECTORS, [])),
+                float(data.get(CONF_MIN_POWER, 0)),
+                bool(data.get(CONF_ONLY_AVAILABLE, True)),
+                DYNAMIC_RESULTS,
+            ),
+        }

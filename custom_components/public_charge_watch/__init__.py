@@ -7,9 +7,10 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_state_change_event
 
 from .api import NdwFeed
 from .const import (
@@ -17,13 +18,22 @@ from .const import (
     CONF_LOCATION_IDS,
     CONF_SOURCE,
     DOMAIN,
+    DYNAMIC_MOVE_M,
+    SUBENTRY_DYNAMIC,
     SOURCE_NDW,
     SOURCE_OCM,
 )
-from .coordinator import NdwCoordinator, iter_locations
+from .coordinator import DynamicCoordinator, NdwCoordinator, position_of
 from .ocm import OcmClient
+from .parser import distance_m
 
-PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.EVENT]
+PLATFORMS = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.DEVICE_TRACKER,
+    Platform.EVENT,
+]
 
 type NdwConfigEntry = ConfigEntry[NdwCoordinator]
 
@@ -47,9 +57,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: NdwConfigEntry) -> bool:
     coordinator = NdwCoordinator(hass, entry, get_client(hass, entry.data))
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type == SUBENTRY_DYNAMIC:
+            await _async_setup_dynamic(hass, entry, coordinator, subentry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
+
+
+async def _async_setup_dynamic(
+    hass: HomeAssistant, entry: NdwConfigEntry, coordinator: NdwCoordinator, subentry
+) -> None:
+    dynamic = DynamicCoordinator(hass, entry, subentry, get_client(hass, entry.data))
+    await dynamic.async_config_entry_first_refresh()
+    coordinator.dynamic[subentry.subentry_id] = dynamic
+
+    @callback
+    def _moved(event: Event) -> None:
+        """Search again when the tracked entity has moved a while (or gets a position)."""
+        new = position_of(event.data["new_state"])
+        old = dynamic.position
+        if new is None and old is None:
+            return
+        if new is None or old is None or distance_m(*old, *new) >= DYNAMIC_MOVE_M:
+            hass.async_create_task(dynamic.async_request_refresh())
+
+    entry.async_on_unload(
+        async_track_state_change_event(hass, [dynamic.tracked_entity], _moved)
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: NdwConfigEntry) -> bool:
@@ -61,6 +96,12 @@ async def async_remove_config_entry_device(
 ) -> bool:
     """Deleting a charging location's device removes it from its place."""
     ids = {i for domain, i in device_entry.identifiers if domain == DOMAIN}
+    for identifier in ids:
+        if identifier.startswith("dynamic_"):  # a dynamic charging location
+            subentry_id = identifier.removeprefix("dynamic_")
+            if subentry_id in entry.subentries:
+                hass.config_entries.async_remove_subentry(entry, subentry_id)
+                return True
     for subentry in entry.subentries.values():
         remaining = [i for i in subentry.data.get(CONF_LOCATION_IDS, []) if i not in ids]
         if len(remaining) == len(subentry.data.get(CONF_LOCATION_IDS, [])):

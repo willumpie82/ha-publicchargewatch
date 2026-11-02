@@ -33,6 +33,9 @@
       },
       "last_checked": {
         "default": "mdi:update"
+      },
+      "nearest": {
+        "default": "mdi:ev-station"
       }
     },
     "binary_sensor": {
@@ -52,6 +55,14 @@
     "event": {
       "availability": {
         "default": "mdi:ev-station"
+      },
+      "nearest": {
+        "default": "mdi:ev-station"
+      }
+    },
+    "device_tracker": {
+      "nearest": {
+        "default": "mdi:map-marker-radius"
       }
     }
   }

@@ -34,6 +34,22 @@ it from its place. The update interval is set per source (⋮ → Configure).
 5. **Refresh interval**, with the data-traffic note for NDW.
 Further locations repeat steps 3–4 only (already added ones are hidden).
 
+## Dynamic charging location (NDW)
+"Add dynamic charging location" (⋮ on the NDW entry) follows a person, device tracker or zone and
+always shows the nearest charger that has a suitable plug and a free charge point. Choose the
+entity to follow, the search radius (up to 10 km), the plug types (default Type 2 + CCS), a minimum
+power and whether chargers without a free charge point are skipped. It creates:
+- a **sensor** with the address of the best charger and, as attributes, distance, free/total
+  charge points, power, price per kWh, operator, plug types, a `navigate_url` (starts navigation on
+  a phone) and the top 3 as `results`;
+- a **location tracker** at that charger, usable as a navigation target (map card, zones, templates).
+  It is `unknown` when nothing qualifies, so it never points at a stale charger;
+- an **event** `nearest_changed`, fired when a different charger with a free charge point becomes
+  the best one (same attributes as the sensor), to build "tell me where I can charge" automations.
+
+It searches the NDW data the entry already holds, so following a moving car costs no extra download;
+it recomputes on every refresh and when the followed entity has moved about 150 m.
+
 ## Entities (created from the data the location actually has)
 - Location device: *available charge points* (NDW) or *operational charge points* (OCM),
   *last status change* and *last update* (diagnostic; the latter is when we last fetched

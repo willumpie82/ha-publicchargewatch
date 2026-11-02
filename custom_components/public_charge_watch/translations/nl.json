@@ -60,10 +60,10 @@
         "description": "Druk op Verzenden om het opnieuw te proberen."
       },
       "select": {
-        "title": "Kies een laadlocatie",
+        "title": "Kies laadlocaties",
         "description": "Gesorteerd op afstand, met de huidige beschikbaarheid, het vermogen en de prijs als die bekend zijn. {hidden}",
         "data": {
-          "location_id": "Laadlocatie"
+          "location_ids": "Laadlocaties"
         }
       },
       "interval_ndw": {
@@ -98,7 +98,8 @@
       "no_locations": "Geen laadlocaties gevonden in dit gebied. Vergroot de radius of kies een andere plek.",
       "postcode_invalid": "Dit is geen geldige Nederlandse postcode (bijvoorbeeld 5223 HS).",
       "postcode_not_found": "Postcode niet gevonden.",
-      "zone_not_found": "Deze zone heeft geen locatie."
+      "zone_not_found": "Deze zone heeft geen locatie.",
+      "no_selection": "Kies minimaal één laadlocatie."
     },
     "abort": {
       "already_configured": "Deze bron is al ingesteld. Voeg laadlocaties toe via ‘Laadlocatie toevoegen’ bij die bron.",
@@ -158,6 +159,9 @@
       },
       "last_checked": {
         "name": "Laatste update"
+      },
+      "nearest": {
+        "name": "Dichtstbijzijnde laadpaal"
       }
     },
     "binary_sensor": {
@@ -181,6 +185,21 @@
             }
           }
         }
+      },
+      "nearest": {
+        "name": "Dichtstbijzijnde laadpaal",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "nearest_changed": "Betere laadpaal in de buurt"
+            }
+          }
+        }
+      }
+    },
+    "device_tracker": {
+      "nearest": {
+        "name": "Dichtstbijzijnde laadpaal"
       }
     }
   },
@@ -228,10 +247,10 @@
           "description": "Druk op Verzenden om het opnieuw te proberen."
         },
         "select": {
-          "title": "Kies een laadlocatie",
+          "title": "Kies laadlocaties",
           "description": "Gesorteerd op afstand, met de huidige beschikbaarheid, het vermogen en de prijs als die bekend zijn. {hidden}",
           "data": {
-            "location_id": "Laadlocatie"
+            "location_ids": "Laadlocaties"
           }
         },
         "reconfigure": {
@@ -258,12 +277,48 @@
         "no_locations": "Geen laadlocaties gevonden in dit gebied. Vergroot de radius of kies een andere plek.",
         "postcode_invalid": "Dit is geen geldige Nederlandse postcode (bijvoorbeeld 5223 HS).",
         "postcode_not_found": "Postcode niet gevonden.",
-        "zone_not_found": "Deze zone heeft geen locatie."
+        "zone_not_found": "Deze zone heeft geen locatie.",
+        "no_selection": "Kies minimaal één laadlocatie."
       },
       "abort": {
         "already_configured": "Deze laadlocatie is al toegevoegd.",
         "cannot_connect": "Kan de NDW-gegevens niet ophalen.",
-        "location_added": "{place} bestond al: de laadlocatie is daaraan toegevoegd.",
+        "location_added": "Laadlocaties toegevoegd aan: {place}.",
+        "reconfigure_successful": "Opgeslagen."
+      }
+    },
+    "dynamic": {
+      "initiate_flow": {
+        "user": "Dynamische laadlocatie toevoegen"
+      },
+      "entry_type": "Dynamisch",
+      "step": {
+        "user": {
+          "title": "Dynamische laadlocatie",
+          "description": "Volgt een persoon of device tracker en toont steeds de dichtstbijzijnde laadpaal met een passende stekker en een vrij laadpunt: als sensor, als gebeurtenis en als locatietracker waar je naartoe kunt navigeren.",
+          "data": {
+            "name": "Naam",
+            "tracked_entity": "Volg deze entiteit",
+            "radius": "Zoekstraal",
+            "connector_types": "Stekkertypes",
+            "min_power_kw": "Minimaal vermogen",
+            "only_available": "Alleen laadpalen met een vrij laadpunt"
+          }
+        },
+        "reconfigure": {
+          "title": "Dynamische laadlocatie",
+          "description": "Volgt een persoon of device tracker en toont steeds de dichtstbijzijnde laadpaal met een passende stekker en een vrij laadpunt: als sensor, als gebeurtenis en als locatietracker waar je naartoe kunt navigeren.",
+          "data": {
+            "name": "Naam",
+            "tracked_entity": "Volg deze entiteit",
+            "radius": "Zoekstraal",
+            "connector_types": "Stekkertypes",
+            "min_power_kw": "Minimaal vermogen",
+            "only_available": "Alleen laadpalen met een vrij laadpunt"
+          }
+        }
+      },
+      "abort": {
         "reconfigure_successful": "Opgeslagen."
       }
     }

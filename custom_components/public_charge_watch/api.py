@@ -19,6 +19,7 @@ from .const import (
     DOMAIN,
     FEED_URL,
     MIN_FEED_AGE,
+    TARIFF_LAZY_AGE,
     TARIFF_MAX_AGE,
     TARIFF_RETRY,
     TARIFF_URL,
@@ -111,6 +112,23 @@ class NdwFeed:
             find_nearby, raw, latitude, longitude, radius_m
         )
 
+    async def async_nearby_live(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_m: float,
+        max_age: float | None = None,
+    ) -> list[dict[str, Any]]:
+        """Nearby locations with prices attached (known tariffs; new ones at most hourly)."""
+        locations = await self.async_nearby(latitude, longitude, radius_m, max_age)
+        tariff_ids = {
+            t for loc in locations for g in loc["groups"] for t in g["tariff_ids"]
+        }
+        tariffs = await self.async_get_tariffs(tariff_ids, lazy=True)
+        for loc in locations:
+            _attach_price(loc, tariffs)
+        return locations
+
     async def async_get_locations(
         self, ids: set[str], force: bool = False, max_age: float | None = None
     ) -> dict[str, dict[str, Any]]:
@@ -143,8 +161,14 @@ class NdwFeed:
 
     # --- tariffs ---------------------------------------------------------------
 
-    async def async_get_tariffs(self, ids: set[str]) -> dict[str, dict[str, Any]]:
-        """Simplified tariffs for ids. Downloads at most once a day; kept across restarts."""
+    async def async_get_tariffs(
+        self, ids: set[str], lazy: bool = False
+    ) -> dict[str, dict[str, Any]]:
+        """Simplified tariffs for ids. Downloads at most once a day; kept across restarts.
+
+        lazy: ids not met before (a moving search keeps finding new ones) only trigger a
+        download when the last one is older than an hour.
+        """
         if not ids:
             return {}
         async with self._tariff_lock:
@@ -158,7 +182,10 @@ class NdwFeed:
                 }
             state = self._tariff_state
             new_ids = ids - state["requested"]
-            due = time.time() - state["fetched"] > TARIFF_MAX_AGE
+            age = time.time() - state["fetched"]
+            due = age > TARIFF_MAX_AGE
+            if lazy and age <= TARIFF_LAZY_AGE:
+                new_ids = set()
             if (new_ids or due) and time.monotonic() > self._tariff_retry_after:
                 try:
                     await self._refresh_tariffs(state, ids, use_etag=not new_ids)

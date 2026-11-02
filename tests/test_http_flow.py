@@ -31,6 +31,6 @@ async def test_subentry_over_http(hass, hass_client, mock_ndw):
     while r["type"] in ("progress", "progress_done"):
         await hass.async_block_till_done()
         r = await post(url, {})
-    r = await post(url, {"location_id": "NL-NUO-two"})
+    r = await post(url, {"location_ids": ["NL-NUO-two"]})
     (place,) = entry.subentries.values()  # same town: joins the existing place
     assert place.data["location_ids"] == ["NL-NUO-near", "NL-NUO-two"]

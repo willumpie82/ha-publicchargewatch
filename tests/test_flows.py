@@ -45,7 +45,8 @@ async def _add_ndw_location(hass, location_id):
     result = await _configure(hass, result, {"zone": "zone.home", "radius": 200})
     result = await _progress(hass, result)
     assert result["step_id"] == "select"
-    result = await _configure(hass, result, {"location_id": location_id})
+    ids = [location_id] if isinstance(location_id, str) else location_id
+    result = await _configure(hass, result, {"location_ids": ids})
     assert result["step_id"] == "interval_ndw"
     result = await _configure(hass, result, {"scan_interval": 300})
     assert result["type"] is FlowResultType.CREATE_ENTRY, result
@@ -101,9 +102,9 @@ async def _add_via_subentry(hass, entry, location_id):
     flow = await _configure_sub(hass, flow, {"zone": "zone.home", "radius": 200})
     flow = await _progress_sub(hass, flow)
     assert flow["step_id"] == "select"
-    selector = next(v for k, v in flow["data_schema"].schema.items() if k == "location_id")
+    selector = next(v for k, v in flow["data_schema"].schema.items() if k == "location_ids")
     values = [o["value"] for o in selector.config["options"]]
-    flow = await _configure_sub(hass, flow, {"location_id": location_id})
+    flow = await _configure_sub(hass, flow, {"location_ids": [location_id]})
     await hass.async_block_till_done()
     return flow, values
 
@@ -197,7 +198,7 @@ async def test_postcode_search(hass, mock_ndw):
     result = await _configure(hass, bad, {"postcode": "5223 hs", "house_number": "23", "radius": 200})
     result = await _progress(hass, result)
     assert result["step_id"] == "select"
-    selector = next(v for k, v in result["data_schema"].schema.items() if k == "location_id")
+    selector = next(v for k, v in result["data_schema"].schema.items() if k == "location_ids")
     labels = [o["label"] for o in selector.config["options"]]
     assert labels[0].startswith("Teststraat 1 · Vattenfall InCharge · 1/2 ✓")
     assert "€0.3256/kWh" in labels[0]
@@ -240,7 +241,7 @@ async def test_ocm_flow_has_no_ndw_download_and_other_entities(hass, mock_ocm):
     result = await _configure(hass, result, {"zone": "zone.home", "radius": 200})
     result = await _progress(hass, result)
     assert result["step_id"] == "select"
-    result = await _configure(hass, result, {"location_id": "ocm-473176"})
+    result = await _configure(hass, result, {"location_ids": ["ocm-473176"]})
     assert result["step_id"] == "interval_ocm"
     result = await _configure(hass, result, {"scan_interval": 1800})
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -370,3 +371,11 @@ async def test_notify_entity_gates_the_events(hass, mock_ndw):
     hass.states.async_set("input_boolean.need_charge", "on")
     await _update_feed(hass, mock_ndw, 1)
     assert hass.states.get(event).attributes["event_type"] == "became_available"
+
+
+async def test_several_locations_can_be_picked_at_once(hass, mock_ndw):
+    await _add_ndw_location(hass, ["NL-NUO-near", "NL-NUO-two"])
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    (place,) = entry.subentries.values()  # same town: one place holding both
+    assert place.data["location_ids"] == ["NL-NUO-near", "NL-NUO-two"]
+    assert _entity(hass, "sensor", "NL-NUO-two_available") is not None
