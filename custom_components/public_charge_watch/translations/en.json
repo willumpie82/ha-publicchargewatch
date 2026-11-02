@@ -86,6 +86,13 @@
         "data": {
           "api_key": "API key"
         }
+      },
+      "interval_api": {
+        "title": "Refresh",
+        "description": "How often should availability be refreshed? Every refresh asks NDW only for your locations: a few kB. Minimum {minimum} seconds. Prices are refreshed at most once per day.",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
       }
     },
     "progress": {
@@ -121,7 +128,8 @@
     "source": {
       "options": {
         "ndw": "NDW – Netherlands only, live availability",
-        "ocm": "Open Charge Map – worldwide, API key, no live occupancy"
+        "ocm": "Open Charge Map – worldwide, API key, no live occupancy",
+        "ndw_api": "NDW (live API) – Netherlands only, live availability, light on data"
       }
     }
   },

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from copy import deepcopy
 from datetime import date
 import logging
@@ -32,6 +33,89 @@ _LOGGER = logging.getLogger(__name__)
 _TIMEOUT = aiohttp.ClientTimeout(total=180)
 
 
+async def _download(
+    session: aiohttp.ClientSession, url: str, etag: str | None
+) -> tuple[bytes, str | None] | None:
+    """Return (raw, etag), or None when unchanged (HTTP 304)."""
+    headers = {"If-None-Match": etag} if etag else {}
+    async with session.get(url, headers=headers, timeout=_TIMEOUT) as resp:
+        if resp.status == 304:
+            return None
+        resp.raise_for_status()
+        return await resp.read(), resp.headers.get("ETag")
+
+
+class NdwTariffs:
+    """The NDW tariff file: downloaded at most once a day, kept across restarts.
+
+    Shared by every NDW provider, so one download serves them all.
+    """
+
+    def __init__(self, hass: HomeAssistant, session: aiohttp.ClientSession) -> None:
+        self._hass = hass
+        self._session = session
+        self._tariff_store: Store[dict[str, Any]] = Store(hass, 1, f"{DOMAIN}_tariffs")
+        self._tariff_lock = asyncio.Lock()
+        self._tariff_state: dict[str, Any] | None = None  # loaded lazily from the store
+        self._tariff_retry_after = 0.0
+
+    async def async_get_tariffs(
+        self, ids: set[str], lazy: bool = False
+    ) -> dict[str, dict[str, Any]]:
+        """Simplified tariffs for ids. Downloads at most once a day; kept across restarts.
+
+        lazy: ids not met before (a moving search keeps finding new ones) only trigger a
+        download when the last one is older than an hour.
+        """
+        if not ids:
+            return {}
+        async with self._tariff_lock:
+            if self._tariff_state is None:
+                stored = await self._tariff_store.async_load() or {}
+                self._tariff_state = {
+                    "tariffs": stored.get("tariffs", {}),
+                    "requested": set(stored.get("requested", [])),
+                    "fetched": stored.get("fetched", 0.0),
+                    "etag": stored.get("etag"),
+                }
+            state = self._tariff_state
+            new_ids = ids - state["requested"]
+            age = time.time() - state["fetched"]
+            due = age > TARIFF_MAX_AGE
+            if lazy and age <= TARIFF_LAZY_AGE:
+                new_ids = set()
+            if (new_ids or due) and time.monotonic() > self._tariff_retry_after:
+                try:
+                    await self._refresh_tariffs(state, ids, use_etag=not new_ids)
+                except (aiohttp.ClientError, TimeoutError) as err:
+                    # keep the last known tariffs; availability must not depend on this
+                    _LOGGER.warning("Could not refresh NDW tariffs: %s", err)
+                    self._tariff_retry_after = time.monotonic() + TARIFF_RETRY
+            return {i: state["tariffs"][i] for i in ids if i in state["tariffs"]}
+
+    async def _refresh_tariffs(
+        self, state: dict[str, Any], ids: set[str], use_etag: bool
+    ) -> None:
+        wanted = state["requested"] | ids
+        result = await _download(self._session, TARIFF_URL, state["etag"] if use_etag else None)
+        if result is not None:
+            raw, state["etag"] = result
+            today: date = dt_util.now().date()
+            state["tariffs"] = await self._hass.async_add_executor_job(
+                scan_tariffs, raw, set(wanted), today
+            )
+        state["requested"] = wanted
+        state["fetched"] = time.time()
+        await self._tariff_store.async_save(
+            {
+                "tariffs": state["tariffs"],
+                "requested": sorted(wanted),
+                "fetched": state["fetched"],
+                "etag": state["etag"],
+            }
+        )
+
+
 class NdwFeed(Provider):
     """Shared client: one download serves every NDW config entry."""
 
@@ -42,7 +126,9 @@ class NdwFeed(Provider):
     city_from_geocoder = True  # the NDW feed has no town
     scan_interval = (300, 120)
 
-    def __init__(self, hass: HomeAssistant, session: aiohttp.ClientSession) -> None:
+    def __init__(
+        self, hass: HomeAssistant, session: aiohttp.ClientSession, tariffs: NdwTariffs
+    ) -> None:
         self._hass = hass
         self._session = session
         self._lock = asyncio.Lock()
@@ -52,22 +138,7 @@ class NdwFeed(Provider):
         self._fetched = 0.0
         self._wanted: set[str] = set()
         self._cache: dict[str, dict[str, Any]] = {}
-
-        self._tariff_store: Store[dict[str, Any]] = Store(
-            hass, 1, f"{DOMAIN}_tariffs"
-        )
-        self._tariff_lock = asyncio.Lock()
-        self._tariff_state: dict[str, Any] | None = None  # loaded lazily from the store
-        self._tariff_retry_after = 0.0
-
-    async def _download(self, url: str, etag: str | None) -> tuple[bytes, str | None] | None:
-        """Return (raw, etag), or None when unchanged (HTTP 304)."""
-        headers = {"If-None-Match": etag} if etag else {}
-        async with self._session.get(url, headers=headers, timeout=_TIMEOUT) as resp:
-            if resp.status == 304:
-                return None
-            resp.raise_for_status()
-            return await resp.read(), resp.headers.get("ETag")
+        self._tariffs = tariffs
 
     # --- locations -------------------------------------------------------------
 
@@ -84,8 +155,10 @@ class NdwFeed(Provider):
             and time.monotonic() - self._fetched <= limit
         ):
             return False
-        result = await self._download(
-            FEED_URL, self._etag if self._raw is not None else None
+        result = await _download(
+            self._session,
+            FEED_URL,
+            self._etag if self._raw is not None else None,
         )
         self._fetched = time.monotonic()
         if result is None:  # 304: unchanged
@@ -135,13 +208,17 @@ class NdwFeed(Provider):
         tariff_ids = {
             t for loc in locations for g in loc["groups"] for t in g["tariff_ids"]
         }
-        tariffs = await self.async_get_tariffs(tariff_ids, lazy=True)
+        tariffs = await self._tariffs.async_get_tariffs(tariff_ids, lazy=True)
         for loc in locations:
             _attach_price(loc, tariffs)
         return locations
 
     async def async_get_locations(
-        self, ids: set[str], force: bool = False, max_age: float | None = None
+        self,
+        ids: set[str],
+        force: bool = False,
+        max_age: float | None = None,
+        coords: Mapping[str, tuple[float, float]] | None = None,  # noqa: ARG002
     ) -> dict[str, dict[str, Any]]:
         """Current availability for the given location ids, with prices attached.
 
@@ -165,68 +242,10 @@ class NdwFeed(Provider):
         tariff_ids = {
             t for loc in locations.values() for g in loc["groups"] for t in g["tariff_ids"]
         }
-        tariffs = await self.async_get_tariffs(tariff_ids)
+        tariffs = await self._tariffs.async_get_tariffs(tariff_ids)
         for loc in locations.values():
             _attach_price(loc, tariffs)
         return locations
-
-    # --- tariffs ---------------------------------------------------------------
-
-    async def async_get_tariffs(
-        self, ids: set[str], lazy: bool = False
-    ) -> dict[str, dict[str, Any]]:
-        """Simplified tariffs for ids. Downloads at most once a day; kept across restarts.
-
-        lazy: ids not met before (a moving search keeps finding new ones) only trigger a
-        download when the last one is older than an hour.
-        """
-        if not ids:
-            return {}
-        async with self._tariff_lock:
-            if self._tariff_state is None:
-                stored = await self._tariff_store.async_load() or {}
-                self._tariff_state = {
-                    "tariffs": stored.get("tariffs", {}),
-                    "requested": set(stored.get("requested", [])),
-                    "fetched": stored.get("fetched", 0.0),
-                    "etag": stored.get("etag"),
-                }
-            state = self._tariff_state
-            new_ids = ids - state["requested"]
-            age = time.time() - state["fetched"]
-            due = age > TARIFF_MAX_AGE
-            if lazy and age <= TARIFF_LAZY_AGE:
-                new_ids = set()
-            if (new_ids or due) and time.monotonic() > self._tariff_retry_after:
-                try:
-                    await self._refresh_tariffs(state, ids, use_etag=not new_ids)
-                except (aiohttp.ClientError, TimeoutError) as err:
-                    # keep the last known tariffs; availability must not depend on this
-                    _LOGGER.warning("Could not refresh NDW tariffs: %s", err)
-                    self._tariff_retry_after = time.monotonic() + TARIFF_RETRY
-            return {i: state["tariffs"][i] for i in ids if i in state["tariffs"]}
-
-    async def _refresh_tariffs(
-        self, state: dict[str, Any], ids: set[str], use_etag: bool
-    ) -> None:
-        wanted = state["requested"] | ids
-        result = await self._download(TARIFF_URL, state["etag"] if use_etag else None)
-        if result is not None:
-            raw, state["etag"] = result
-            today: date = dt_util.now().date()
-            state["tariffs"] = await self._hass.async_add_executor_job(
-                scan_tariffs, raw, set(wanted), today
-            )
-        state["requested"] = wanted
-        state["fetched"] = time.time()
-        await self._tariff_store.async_save(
-            {
-                "tariffs": state["tariffs"],
-                "requested": sorted(wanted),
-                "fetched": state["fetched"],
-                "etag": state["etag"],
-            }
-        )
 
 
 def _attach_price(loc: dict[str, Any], tariffs: dict[str, dict[str, Any]]) -> None:

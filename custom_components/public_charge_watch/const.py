@@ -57,3 +57,12 @@ MAX_DYNAMIC_RADIUS_M = 10_000
 DYNAMIC_RESULTS = 3  # chargers listed in the sensor attributes
 DYNAMIC_MOVE_M = 150  # recompute when the tracked entity moved this far
 TARIFF_LAZY_AGE = 3600  # new locations met while moving may trigger a tariff download this often
+
+# NDW DOT-NL REST API: only the area asked for (a bounding box), no bulk download
+DOTNL_URL = (
+    "https://dotnl.ndw.nu/api/rest/geojson/dynamic-road-status/charge-point-data/v1/features"
+)
+DOTNL_MAX_BBOX_DEG2 = 1.0  # the API refuses larger areas
+DOTNL_REQUEST_GAP = 0.11  # seconds between requests (the API is rate limited)
+DOTNL_LOCATION_RADIUS_M = 150  # area asked for around a known location
+CONF_COORDS = "coordinates"  # {location_id: [latitude, longitude]} stored in a place

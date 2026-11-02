@@ -111,22 +111,64 @@ def mock_city(aioclient_mock, city="Teststad"):
     aioclient_mock.get(PDOK_URL.replace("/free", "/reverse"), side_effect=reverse)
 
 
+def _ndw_body():
+    body = NDW_FEED
+    if NEAR_FREE["n"] is not None:  # tests change the availability mid-test
+        body = copy.deepcopy(NDW_FEED)
+        body["features"][0]["properties"]["availabilities"][0]["available"] = NEAR_FREE["n"]
+    return body
+
+
 @pytest.fixture
 def mock_ndw(aioclient_mock):
     headers = {"ETag": '"v1"'}
     NEAR_FREE["n"] = None
 
     async def feed(method, url, data):
-        body = NDW_FEED
-        if NEAR_FREE["n"] is not None:  # tests change the availability mid-test
-            body = copy.deepcopy(NDW_FEED)
-            body["features"][0]["properties"]["availabilities"][0]["available"] = NEAR_FREE["n"]
-        return AiohttpClientMockResponse(method, url, response=_gz(body), headers=headers)
+        return AiohttpClientMockResponse(method, url, response=_gz(_ndw_body()), headers=headers)
 
     aioclient_mock.get(FEED_URL, side_effect=feed)
     aioclient_mock.get(TARIFF_URL, content=_gz(NDW_TARIFFS), headers=headers)
     mock_city(aioclient_mock, "Teststad")
     return aioclient_mock
+
+
+@pytest.fixture
+def mock_ndw_api(mock_ndw):
+    """The DOT-NL bounding-box API: serves the features inside the requested box."""
+    from custom_components.public_charge_watch.const import DOTNL_URL
+
+    mock_ndw.api_calls = []
+    mock_ndw.api_page_size = 1000
+
+    async def api(method, url, data):
+        west, south, east, north = (float(v) for v in url.query["bbox"].split(","))
+        mock_ndw.api_calls.append((west, south, east, north))
+        features = [
+            f
+            for f in _ndw_body()["features"]
+            if west <= f["geometry"]["coordinates"][0] <= east
+            and south <= f["geometry"]["coordinates"][1] <= north
+        ]
+        # pages of PAGE_SIZE, the next one named by a cursor in a Link header with a wrong path
+        # (like the real API)
+        start = int(url.query.get("cursor", 0))
+        page = features[start : start + mock_ndw.api_page_size]
+        headers = {"x-total-count": str(len(features))}
+        if start + mock_ndw.api_page_size < len(features):
+            headers["Link"] = (
+                f'<https://dotnl.ndw.nu/api/rest/geojson/features?bbox={url.query["bbox"]}'
+                f'&cursor={start + mock_ndw.api_page_size}>; rel="next"'
+            )
+        return AiohttpClientMockResponse(
+            method,
+            url,
+            response=json.dumps({"type": "FeatureCollection", "features": page}).encode(),
+            headers=headers,
+        )
+
+    mock_ndw.get(DOTNL_URL, side_effect=api)
+    return mock_ndw
 
 
 @pytest.fixture

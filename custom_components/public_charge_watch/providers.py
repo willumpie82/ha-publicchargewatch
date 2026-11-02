@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from .api import NdwFeed
+from .ndw_api import NdwApi
 from .ocm import OcmClient
 from .provider import Provider
 
 PROVIDERS: dict[str, type[Provider]] = {
-    provider.provider_id: provider for provider in (NdwFeed, OcmClient)
+    provider.provider_id: provider for provider in (NdwFeed, NdwApi, OcmClient)
 }

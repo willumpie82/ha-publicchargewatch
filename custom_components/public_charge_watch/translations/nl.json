@@ -86,6 +86,13 @@
         "data": {
           "api_key": "API-key"
         }
+      },
+      "interval_api": {
+        "title": "Verversen",
+        "description": "Hoe vaak moet de beschikbaarheid ververst worden? Elke verversing vraagt NDW alleen om jouw locaties: een paar kB. Minimaal {minimum} seconden. Prijzen worden hooguit eens per dag ververst.",
+        "data": {
+          "scan_interval": "Ververstijd (seconden)"
+        }
       }
     },
     "progress": {
@@ -121,7 +128,8 @@
     "source": {
       "options": {
         "ndw": "NDW – alleen Nederland, live beschikbaarheid",
-        "ocm": "Open Charge Map – wereldwijd, API-key, geen live bezetting"
+        "ocm": "Open Charge Map – wereldwijd, API-key, geen live bezetting",
+        "ndw_api": "NDW (live API) – alleen Nederland, live beschikbaarheid, weinig data"
       }
     }
   },

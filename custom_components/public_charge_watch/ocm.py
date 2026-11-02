@@ -161,6 +161,7 @@ class OcmClient(Provider):
         ids: set[str],
         force: bool = False,  # noqa: ARG002 - every OCM call is fresh
         max_age: float | None = None,  # noqa: ARG002
+        coords: Any = None,  # noqa: ARG002
     ) -> dict[str, dict[str, Any]]:
         numeric = [i.removeprefix(ID_PREFIX) for i in ids]
         pois = await self._get(

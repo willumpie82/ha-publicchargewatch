@@ -17,6 +17,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     CONF_CONNECTORS,
+    CONF_COORDS,
     CONF_MIN_POWER,
     CONF_ONLY_AVAILABLE,
     CONF_RADIUS,
@@ -29,9 +30,19 @@ from .const import (
     SUBENTRY_LOCATION,
 )
 from .dynamic import pick
-from .provider import Provider, ProviderAuthError
+from .provider import Provider, ProviderAuthError, ProviderError
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def location_coords(entry: ConfigEntry) -> dict[str, tuple[float, float]]:
+    """Stored coordinates of the entry's locations (for sources that look up by area)."""
+    return {
+        location_id: (float(lat), float(lon))
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_LOCATION
+        for location_id, (lat, lon) in subentry.data.get(CONF_COORDS, {}).items()
+    }
 
 
 def iter_locations(entry: ConfigEntry) -> Iterator[tuple[str, str]]:
@@ -93,10 +104,11 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 ids,
                 force=force,
                 max_age=0.8 * self.update_interval.total_seconds(),
+                coords=location_coords(self.config_entry),
             )
         except ProviderAuthError as err:
             raise ConfigEntryAuthFailed(f"{self._client.name} rejected the credentials") from err
-        except (aiohttp.ClientError, TimeoutError) as err:
+        except (aiohttp.ClientError, TimeoutError, ProviderError) as err:
             raise UpdateFailed(f"Error fetching charger data: {err}") from err
         if not locations:
             raise UpdateFailed(f"No location found in {self.source} data")
@@ -165,7 +177,7 @@ class DynamicCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data[CONF_RADIUS],
                 max_age=0 if force else 0.8 * self.update_interval.total_seconds(),
             )
-        except (aiohttp.ClientError, TimeoutError) as err:
+        except (aiohttp.ClientError, TimeoutError, ProviderError) as err:
             raise UpdateFailed(f"Error fetching charger data: {err}") from err
         return {
             "position": position,

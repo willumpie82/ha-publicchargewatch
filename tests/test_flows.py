@@ -28,15 +28,15 @@ def _entity(hass, domain, unique_id):
     return er.async_get(hass).async_get_entity_id(domain, DOMAIN, unique_id)
 
 
-async def _ndw_to_search_method(hass):
+async def _ndw_to_search_method(hass, source="ndw"):
     hass.config.country = "NL"
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     assert result["step_id"] == "user"
-    return await _configure(hass, result, {"source": "ndw"})
+    return await _configure(hass, result, {"source": source})
 
 
-async def _add_ndw_location(hass, location_id):
-    result = await _ndw_to_search_method(hass)
+async def _add_ndw_location(hass, location_id, source="ndw"):
+    result = await _ndw_to_search_method(hass, source)
     if result["type"] is FlowResultType.MENU and result["step_id"] == "ndw_confirm":
         result = await _configure(hass, result, {"next_step_id": "fetch"})
     result = await _progress(hass, result)
@@ -47,7 +47,7 @@ async def _add_ndw_location(hass, location_id):
     assert result["step_id"] == "select"
     ids = [location_id] if isinstance(location_id, str) else location_id
     result = await _configure(hass, result, {"location_ids": ids})
-    assert result["step_id"] == "interval_ndw"
+    assert result["step_id"] in ("interval_ndw", "interval_api")
     result = await _configure(hass, result, {"scan_interval": 300})
     assert result["type"] is FlowResultType.CREATE_ENTRY, result
     await hass.async_block_till_done()
@@ -118,7 +118,7 @@ async def test_location_in_the_same_place_joins_that_place(hass, mock_ndw):
 
     # a second NDW entry is refused: locations are added to the existing one
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
-    assert result["data_schema"].schema["source"].config["options"] == ["ocm"]
+    assert result["data_schema"].schema["source"].config["options"] == ["ndw_api", "ocm"]
 
     flow, values = await _add_via_subentry(hass, entry, "NL-NUO-two")
     assert "NL-NUO-near" not in values  # already added
@@ -282,7 +282,10 @@ async def test_entries_share_one_download(hass, mock_ndw):
     from custom_components.public_charge_watch.api import NdwFeed
     from custom_components.public_charge_watch.const import FEED_URL
 
-    feed = NdwFeed(hass, async_get_clientsession(hass))
+    from custom_components.public_charge_watch.api import NdwTariffs
+
+    session = async_get_clientsession(hass)
+    feed = NdwFeed(hass, session, NdwTariffs(hass, session))
     calls = lambda: sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL)  # noqa: E731
 
     first = await feed.async_get_locations({"NL-NUO-near"}, max_age=240)

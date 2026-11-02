@@ -10,6 +10,7 @@ flows and the dynamic location) and what is the current state of these known loc
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Any, ClassVar
 
 
@@ -62,9 +63,16 @@ class Provider(ABC):
 
     @abstractmethod
     async def async_get_locations(
-        self, ids: set[str], force: bool = False, max_age: float | None = None
+        self,
+        ids: set[str],
+        force: bool = False,
+        max_age: float | None = None,
+        coords: Mapping[str, tuple[float, float]] | None = None,
     ) -> dict[str, dict[str, Any]]:
-        """Current state of known locations; force skips any shared-data reuse."""
+        """Current state of known locations; force skips any shared-data reuse.
+
+        coords (id -> latitude, longitude) is for sources that can only look up by area.
+        """
 
     async def async_validate(self) -> None:
         """Raise ProviderAuthError when the credentials are rejected."""

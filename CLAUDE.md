@@ -37,6 +37,16 @@ is missing from the data.
 - Not everything exists: private/semi-public chargers (e.g. company sites) are in neither NDW nor
   OCM. That is a data limit, not a bug.
 
+## NDW DOT-NL bounding-box API (`ndw_api.py`, provider `ndw_api`)
+`https://dotnl.ndw.nu/api/rest/geojson/dynamic-road-status/charge-point-data/v1/features?bbox=w,s,e,n`
+returns the same features as the bulk file for one area (no key; max 1 square degree; ~9 requests/s).
+Things found by testing it live: there is **no lookup by id** (so places store `coordinates` per
+location and known locations are fetched through a 150 m box around them); answers above 1000
+locations are paged and the `Link: rel="next"` URL has a **wrong path** (404): only its `cursor` is
+usable, on the normal endpoint; multi-page answers come up a few locations short of
+`x-total-count` (tolerated up to 1%, single pages must be complete); a 429 raises
+`ProviderRateLimitError`. Tariffs are shared with the bulk provider (`NdwTariffs`, one daily download).
+
 ## Performance rule: never build objects for the whole feed
 `parser.scan` and `ndw_tariff.scan_tariffs` first match each feature/tariff start with a regex
 and only `json.loads` the wanted ones (30–80× faster than streaming with `ijson`: 0.2 s vs 6–13 s

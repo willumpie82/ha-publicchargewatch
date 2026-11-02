@@ -57,6 +57,7 @@ from .const import (
     CONF_HOUSE_NUMBER,
     CONF_LOCATION,
     CONF_CITY,
+    CONF_COORDS,
     CONF_LOCATION_ID,
     CONF_LOCATION_IDS,
     CONF_MIN_POWER,
@@ -92,8 +93,10 @@ def _place_key(city: str | None) -> str:
     return (city or "").strip().lower() or "other"
 
 
-def _place_data(city: str | None, ids: list[str]) -> dict[str, Any]:
-    return {CONF_CITY: city, CONF_LOCATION_IDS: ids}
+def _place_data(
+    city: str | None, ids: list[str], coords: dict[str, list[float]]
+) -> dict[str, Any]:
+    return {CONF_CITY: city, CONF_LOCATION_IDS: ids, CONF_COORDS: coords}
 
 
 def _title(loc: dict[str, Any]) -> str:
@@ -183,12 +186,14 @@ class _LocationSearch:
 
     async def _group_by_place(
         self, locs: list[dict[str, Any]]
-    ) -> dict[str, tuple[str | None, list[str]]]:
-        """Chosen locations grouped per place: {place key: (town, location ids)}."""
-        groups: dict[str, tuple[str | None, list[str]]] = {}
+    ) -> dict[str, tuple[str | None, list[str], dict[str, list[float]]]]:
+        """Chosen locations grouped per place: {place key: (town, ids, coordinates)}."""
+        groups: dict[str, tuple[str | None, list[str], dict[str, list[float]]]] = {}
         for loc in locs:
             city = await self._place_of(loc)
-            groups.setdefault(_place_key(city), (city, []))[1].append(loc["id"])
+            _, ids, coords = groups.setdefault(_place_key(city), (city, [], {}))
+            ids.append(loc["id"])
+            coords[loc["id"]] = [loc["latitude"], loc["longitude"]]
         return groups
 
     async def _place_of(self, loc: dict[str, Any]) -> str | None:
@@ -428,7 +433,7 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._init_search(SOURCE_NDW, None)
-        self._places_chosen: dict[str, tuple[str | None, list[str]]] = {}
+        self._places_chosen: dict[str, tuple[str | None, list[str], dict[str, list[float]]]] = {}
 
     @staticmethod
     @callback
@@ -456,7 +461,9 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()  # add locations to that entry instead
             if PROVIDERS[self._source].needs_api_key:
                 return await self.async_step_api_key()
-            return await self.async_step_ndw_confirm()
+            if PROVIDERS[self._source].bulk_download:
+                return await self.async_step_ndw_confirm()
+            return await self.async_step_location_method()
         configured = {e.unique_id for e in self._async_current_entries()}
         options = [s for s in PROVIDERS if s not in configured]
         if not options:
@@ -508,11 +515,12 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
 
     async def _locations_chosen(self, locs: list[dict[str, Any]]) -> ConfigFlowResult:
         self._places_chosen = await self._group_by_place(locs)
-        return await (
-            self.async_step_interval_ndw()
-            if PROVIDERS[self._source].bulk_download
-            else self.async_step_interval_ocm()
-        )
+        provider = PROVIDERS[self._source]
+        if provider.bulk_download:
+            return await self.async_step_interval_ndw()
+        if provider.live_occupancy:
+            return await self.async_step_interval_api()
+        return await self.async_step_interval_ocm()
 
     # --- 6. update interval --------------------------------------------------------
 
@@ -520,6 +528,11 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         return await self._interval_step("interval_ndw", user_input)
+
+    async def async_step_interval_api(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._interval_step("interval_api", user_input)
 
     async def async_step_interval_ocm(
         self, user_input: dict[str, Any] | None = None
@@ -543,10 +556,10 @@ class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):
                     ConfigSubentryData(
                         subentry_type=SUBENTRY_LOCATION,
                         title=city or "Other",
-                        data=_place_data(city, ids),
+                        data=_place_data(city, ids, coords),
                         unique_id=key,
                     )
-                    for key, (city, ids) in self._places_chosen.items()
+                    for key, (city, ids, coords) in self._places_chosen.items()
                 ],
             )
         return self.async_show_form(
@@ -651,11 +664,11 @@ class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
         existing = {place.unique_id: place for place in self._places()}
         new = {k: v for k, v in groups.items() if k not in existing}
         if len(groups) == 1 and len(new) == 1:
-            (key, (city, ids)), = new.items()
+            (key, (city, ids, coords)), = new.items()
             return self.async_create_entry(
-                title=city or "Other", data=_place_data(city, ids), unique_id=key
+                title=city or "Other", data=_place_data(city, ids, coords), unique_id=key
             )
-        for key, (city, ids) in groups.items():
+        for key, (city, ids, coords) in groups.items():
             if place := existing.get(key):
                 self.hass.config_entries.async_update_subentry(
                     entry,
@@ -663,19 +676,20 @@ class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
                     data={
                         **place.data,
                         CONF_LOCATION_IDS: [*place.data[CONF_LOCATION_IDS], *ids],
+                        CONF_COORDS: {**place.data.get(CONF_COORDS, {}), **coords},
                     },
                 )
             else:
                 self.hass.config_entries.async_add_subentry(
                     entry,
                     ConfigSubentry(
-                        data=MappingProxyType(_place_data(city, ids)),
+                        data=MappingProxyType(_place_data(city, ids, coords)),
                         subentry_type=SUBENTRY_LOCATION,
                         title=city or "Other",
                         unique_id=key,
                     ),
                 )
-        names = ", ".join(city or "Other" for city, _ in groups.values())
+        names = ", ".join(city or "Other" for city, _, _ in groups.values())
         return self.async_abort(
             reason="location_added", description_placeholders={"place": names}
         )

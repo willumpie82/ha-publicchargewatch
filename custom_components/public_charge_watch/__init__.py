@@ -13,9 +13,10 @@ from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .api import NdwFeed
+from .api import NdwFeed, NdwTariffs
 from .const import (
     CONF_API_KEY,
+    CONF_COORDS,
     CONF_LOCATION_IDS,
     CONF_SOURCE,
     DOMAIN,
@@ -25,6 +26,7 @@ from .const import (
     SOURCE_OCM,
 )
 from .coordinator import DynamicCoordinator, NdwCoordinator, position_of
+from .ndw_api import NdwApi
 from .ocm import OcmClient
 from .parser import distance_m
 from .provider import Provider
@@ -50,8 +52,14 @@ def get_client(hass: HomeAssistant, data: Mapping[str, Any]) -> Provider:
         if key not in clients:
             clients[key] = OcmClient(session, key)
         return clients[key]
+    if "tariffs" not in domain_data:  # one tariff download serves both NDW providers
+        domain_data["tariffs"] = NdwTariffs(hass, session)
+    if data.get(CONF_SOURCE) == NdwApi.provider_id:
+        if "api" not in domain_data:
+            domain_data["api"] = NdwApi(session, domain_data["tariffs"])
+        return domain_data["api"]
     if "feed" not in domain_data:
-        domain_data["feed"] = NdwFeed(hass, session)
+        domain_data["feed"] = NdwFeed(hass, session, domain_data["tariffs"])
     return domain_data["feed"]
 
 
@@ -141,7 +149,17 @@ async def async_remove_config_entry_device(
             continue
         if remaining:
             hass.config_entries.async_update_subentry(
-                entry, subentry, data={**subentry.data, CONF_LOCATION_IDS: remaining}
+                entry,
+                subentry,
+                data={
+                    **subentry.data,
+                    CONF_LOCATION_IDS: remaining,
+                    CONF_COORDS: {
+                        i: c
+                        for i, c in subentry.data.get(CONF_COORDS, {}).items()
+                        if i in remaining
+                    },
+                },
             )
         else:
             hass.config_entries.async_remove_subentry(entry, subentry.subentry_id)
