@@ -235,7 +235,8 @@
         "zone_not_found": "This zone has no location."
       },
       "abort": {
-        "already_configured": "This location is already added."
+        "already_configured": "This location is already added.",
+        "cannot_connect": "Could not fetch the NDW data."
       }
     }
   }

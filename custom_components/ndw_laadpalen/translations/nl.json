@@ -235,7 +235,8 @@
         "zone_not_found": "Deze zone heeft geen locatie."
       },
       "abort": {
-        "already_configured": "Deze laadlocatie is al toegevoegd."
+        "already_configured": "Deze laadlocatie is al toegevoegd.",
+        "cannot_connect": "Kan de NDW-gegevens niet ophalen."
       }
     }
   }

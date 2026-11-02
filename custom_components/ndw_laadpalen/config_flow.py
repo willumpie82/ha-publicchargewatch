@@ -558,7 +558,14 @@ class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
         entry = self._get_entry()
         self._init_search(entry.data[CONF_SOURCE], entry.data.get(CONF_API_KEY))
         if self._source == SOURCE_NDW:
-            return await self.async_step_fetch()
+            # No progress screen: the first step of a subentry flow cannot show one
+            # (the frontend closes it as "created"). Usually the feed is already held.
+            try:
+                await get_client(self.hass, self._client_data).async_raw(
+                    max_age=_FLOW_FEED_AGE
+                )
+            except _NETWORK_ERRORS:
+                return self.async_abort(reason="cannot_connect")
         return await self.async_step_location_method()
 
     @property
