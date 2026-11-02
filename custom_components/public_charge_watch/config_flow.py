@@ -207,8 +207,9 @@ class _LocationSearch:
 
     @callback
     def async_remove(self) -> None:
-        if self._task and not self._task.done():
-            self._task.cancel()
+        task = getattr(self, "_task", None)  # absent when the flow never reached a search
+        if task and not task.done():
+            task.cancel()
 
     # --- NDW: download the feed (progress screen) ----------------------------------
 

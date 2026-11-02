@@ -162,6 +162,21 @@
       },
       "nearest": {
         "name": "Nearest charger"
+      },
+      "nearest_distance": {
+        "name": "Distance"
+      },
+      "nearest_connector": {
+        "name": "Plug type"
+      },
+      "nearest_free": {
+        "name": "Free charge points"
+      },
+      "nearest_power": {
+        "name": "Power"
+      },
+      "nearest_updated": {
+        "name": "Last status change"
       }
     },
     "binary_sensor": {

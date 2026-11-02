@@ -42,6 +42,8 @@ power and whether chargers without a free charge point are skipped. It creates:
 - a **sensor** with the address of the best charger and, as attributes, distance, free/total
   charge points, power, price per kWh, operator, plug types, a `navigate_url` (starts navigation on
   a phone) and the top 3 as `results`;
+- separate **sensors** for *distance* (m), *plug type*, *free charge points* (attribute `free_of_total`,
+  e.g. `1/3`), *power* (kW) and *last status change*, plus a diagnostic *Refresh* button;
 - a **location tracker** at that charger, usable as a navigation target (map card, zones, templates).
   It is `unknown` when nothing qualifies, so it never points at a stale charger;
 - an **event** `nearest_changed`, fired when a different charger with a free charge point becomes

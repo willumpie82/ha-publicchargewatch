@@ -162,6 +162,21 @@
       },
       "nearest": {
         "name": "Dichtstbijzijnde laadpaal"
+      },
+      "nearest_distance": {
+        "name": "Afstand"
+      },
+      "nearest_connector": {
+        "name": "Stekkertype"
+      },
+      "nearest_free": {
+        "name": "Vrije laadpunten"
+      },
+      "nearest_power": {
+        "name": "Vermogen"
+      },
+      "nearest_updated": {
+        "name": "Laatste statuswijziging"
       }
     },
     "binary_sensor": {

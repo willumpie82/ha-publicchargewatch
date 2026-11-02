@@ -144,13 +144,20 @@ class DynamicCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.subentry = subentry
         self._client = client
         self.position: tuple[float, float] | None = None  # where the data was computed
+        self._force = False
 
     @property
     def tracked_entity(self) -> str:
         return self.subentry.data[CONF_TRACKED]
 
+    async def async_force_refresh(self) -> None:
+        """Search now, checking the NDW file again (the refresh button)."""
+        self._force = True
+        await self.async_refresh()
+
     async def _async_update_data(self) -> dict[str, Any]:
         data = self.subentry.data
+        force, self._force = self._force, False
         position = position_of(self.hass.states.get(self.tracked_entity))
         self.position = position
         if position is None:  # unknown / unavailable: show no charger rather than a stale one
@@ -159,7 +166,7 @@ class DynamicCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             locations = await self._client.async_nearby_live(
                 *position,
                 data[CONF_RADIUS],
-                max_age=0.8 * self.update_interval.total_seconds(),
+                max_age=0 if force else 0.8 * self.update_interval.total_seconds(),
             )
         except (aiohttp.ClientError, TimeoutError) as err:
             raise UpdateFailed(f"Error fetching charger data: {err}") from err

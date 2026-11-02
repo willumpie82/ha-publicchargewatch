@@ -26,6 +26,7 @@ class NdwNearestTracker(DynamicEntity, TrackerEntity):
     """At the best charger; unknown when none qualifies, so it never points at a stale one."""
 
     _attr_translation_key = "nearest"
+    _attr_entity_category = None  # trackers default to diagnostic; this is a main entity
 
     def __init__(self, coordinator: DynamicCoordinator, subentry_id: str) -> None:
         super().__init__(coordinator, subentry_id)

@@ -80,8 +80,20 @@ async def test_dynamic_location_tracks_the_nearest_free_charger(hass, mock_ndw):
     assert state.attributes["free"] == 1 and state.attributes["total"] == 2
     assert state.attributes["price_per_kwh"] is not None
     assert [r["id"] for r in state.attributes["results"]] == ["NL-NUO-near", "NL-NUO-two"]
+    def detail(key):
+        return hass.states.get(_entity(hass, "sensor", f"{dynamic.subentry_id}_nearest_{key}"))
+
+    assert detail("distance").state == "0" and detail("distance").attributes["unit_of_measurement"] == "m"
+    assert detail("connector").state == "Type 2"
+    assert detail("free").state == "1" and detail("free").attributes["free_of_total"] == "1/2"
+    assert float(detail("power").state) == 11.0
+    assert detail("updated").state.startswith("2026-11-02T06:45:39")
+
     track = hass.states.get(tracker)
     assert track.attributes["latitude"] == HOME_LAT
+    from homeassistant.helpers import entity_registry as er
+
+    assert er.async_get(hass).async_get(tracker).entity_category is None
     assert track.attributes["navigate_url"].startswith("https://www.google.com/maps/dir/")
 
 
@@ -143,3 +155,16 @@ async def test_removing_the_device_removes_the_dynamic_location(hass, mock_ndw):
     assert await async_remove_config_entry_device(hass, entry, device)
     await hass.async_block_till_done()
     assert dynamic.subentry_id not in entry.subentries
+
+
+async def test_nearest_refresh_button_checks_the_feed_again(hass, mock_ndw):
+    from custom_components.public_charge_watch.const import FEED_URL
+
+    _where(hass)
+    await _add_ndw_location(hass, "NL-NUO-near")
+    entry, dynamic = await _add_dynamic(hass)
+    button = _entity(hass, "button", f"{dynamic.subentry_id}_nearest_refresh")
+    before = sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL)
+    await hass.services.async_call("button", "press", {"entity_id": button}, blocking=True)
+    await hass.async_block_till_done()
+    assert sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL) > before

@@ -60,6 +60,7 @@ def pick(
                     {CONNECTOR_NAMES.get(g["connector_type"], g["connector_type"]) for g in groups}
                 ),
                 "price_per_kwh": _price(loc, groups),
+                "last_updated": loc.get("last_updated"),
                 "navigate_url": navigate_url(loc["latitude"], loc["longitude"]),
             }
         )

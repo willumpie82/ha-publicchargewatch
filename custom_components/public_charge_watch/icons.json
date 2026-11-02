@@ -36,6 +36,21 @@
       },
       "nearest": {
         "default": "mdi:ev-station"
+      },
+      "nearest_distance": {
+        "default": "mdi:map-marker-distance"
+      },
+      "nearest_connector": {
+        "default": "mdi:ev-plug-type2"
+      },
+      "nearest_free": {
+        "default": "mdi:ev-station"
+      },
+      "nearest_power": {
+        "default": "mdi:flash"
+      },
+      "nearest_updated": {
+        "default": "mdi:clock-check-outline"
       }
     },
     "binary_sensor": {

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.const import EntityCategory
+from homeassistant.const import EntityCategory, UnitOfLength, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -24,7 +24,15 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     for subentry_id, dynamic in coordinator.dynamic.items():
         async_add_entities(
-            [NdwNearestSensor(dynamic, subentry_id)], config_subentry_id=subentry_id
+            [
+                NdwNearestSensor(dynamic, subentry_id),
+                NdwNearestDistanceSensor(dynamic, subentry_id),
+                NdwNearestConnectorSensor(dynamic, subentry_id),
+                NdwNearestFreeSensor(dynamic, subentry_id),
+                NdwNearestPowerSensor(dynamic, subentry_id),
+                NdwNearestUpdatedSensor(dynamic, subentry_id),
+            ],
+            config_subentry_id=subentry_id,
         )
     for subentry_id, location_id in iter_locations(entry):
         _setup_location(entry, coordinator, location_id, subentry_id, async_add_entities)
@@ -314,3 +322,79 @@ class NdwNearestSensor(DynamicEntity, SensorEntity):
                 for r in self.coordinator.data["results"]
             ],
         }
+
+
+class _NearestDetail(DynamicEntity, SensorEntity):
+    """One detail of the best charger; unknown when there is none."""
+
+    _key: str
+
+    def __init__(self, coordinator: DynamicCoordinator, subentry_id: str) -> None:
+        super().__init__(coordinator, subentry_id)
+        self._attr_translation_key = f"nearest_{self._key}"
+        self._attr_unique_id = f"{subentry_id}_nearest_{self._key}"
+
+
+class NdwNearestDistanceSensor(_NearestDetail):
+    """Distance from the followed entity to the best charger."""
+
+    _key = "distance"
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_native_unit_of_measurement = UnitOfLength.METERS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> int | None:
+        return self.best["distance_m"] if self.best else None
+
+
+class NdwNearestConnectorSensor(_NearestDetail):
+    """Plug types of the best charger that match the filter, e.g. "Type 2"."""
+
+    _key = "connector"
+
+    @property
+    def native_value(self) -> str | None:
+        return ", ".join(self.best["connectors"]) if self.best else None
+
+
+class NdwNearestFreeSensor(_NearestDetail):
+    """Free charge points of the best charger (of the matching plug types)."""
+
+    _key = "free"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def native_value(self) -> int | None:
+        return self.best["free"] if self.best else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        if not (best := self.best):
+            return {}
+        return {"total": best["total"], "free_of_total": f"{best['free']}/{best['total']}"}
+
+
+class NdwNearestPowerSensor(_NearestDetail):
+    """Highest power of the best charger's matching charge points."""
+
+    _key = "power"
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+
+    @property
+    def native_value(self) -> float | None:
+        return self.best["power_kw"] if self.best else None
+
+
+class NdwNearestUpdatedSensor(_NearestDetail):
+    """When the operator last updated the best charger (shown as "11 minutes ago")."""
+
+    _key = "updated"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def native_value(self) -> datetime | None:
+        if self.best and (text := self.best.get("last_updated")):
+            return dt_util.parse_datetime(text)
+        return None
