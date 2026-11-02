@@ -147,6 +147,7 @@ class _LocationSearch:
         self._problem = "cannot_connect"
         self._problem_next = "location_method"
         self._after_fetch = "location_method"  # step that follows the download
+        self._hidden = 0
 
     @property
     def _client_data(self) -> dict[str, Any]:
@@ -156,6 +157,13 @@ class _LocationSearch:
     def _known_ids(self) -> set[str]:
         """Locations that are already added (hidden from the picker)."""
         return set()
+
+    def _hidden_note(self) -> str:
+        if not self._hidden:
+            return ""
+        if self.hass.config.language.startswith("nl"):
+            return f"\n\n_{self._hidden} al toegevoegde laadlocatie(s) staan niet in de lijst._"
+        return f"\n\n_{self._hidden} already added location(s) are not listed._"
 
     async def _location_chosen(self, loc: dict[str, Any]) -> Any:
         raise NotImplementedError
@@ -335,6 +343,7 @@ class _LocationSearch:
             return self._fail("cannot_connect", "location_method")
         if not found:
             return self._fail("no_locations", "location_method")
+        self._hidden = sum(1 for c in found if c["id"] in self._known_ids)
         found = [c for c in found if c["id"] not in self._known_ids]
         if not found:
             return self._fail("no_locations", "location_method")
@@ -380,7 +389,13 @@ class _LocationSearch:
                 )
             }
         )
-        return self.async_show_form(step_id="select", data_schema=schema)
+        return self.async_show_form(
+            step_id="select",
+            data_schema=schema,
+            description_placeholders={
+                "hidden": self._hidden_note()
+            },
+        )
 
 
 class NdwConfigFlow(_LocationSearch, ConfigFlow, domain=DOMAIN):

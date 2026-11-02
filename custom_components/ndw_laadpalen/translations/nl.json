@@ -61,7 +61,7 @@
       },
       "select": {
         "title": "Kies een laadlocatie",
-        "description": "Gesorteerd op afstand, met de huidige beschikbaarheid, het vermogen en de prijs als die bekend zijn.",
+        "description": "Gesorteerd op afstand, met de huidige beschikbaarheid, het vermogen en de prijs als die bekend zijn. {hidden}",
         "data": {
           "location_id": "Laadlocatie"
         }
@@ -216,7 +216,7 @@
         },
         "select": {
           "title": "Kies een laadlocatie",
-          "description": "Gesorteerd op afstand, met de huidige beschikbaarheid, het vermogen en de prijs als die bekend zijn.",
+          "description": "Gesorteerd op afstand, met de huidige beschikbaarheid, het vermogen en de prijs als die bekend zijn. {hidden}",
           "data": {
             "location_id": "Laadlocatie"
           }

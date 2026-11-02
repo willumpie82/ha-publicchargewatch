@@ -61,7 +61,7 @@
       },
       "select": {
         "title": "Choose a charging location",
-        "description": "Sorted by distance, with current availability, power and price when known.",
+        "description": "Sorted by distance, with current availability, power and price when known. {hidden}",
         "data": {
           "location_id": "Charging location"
         }
@@ -216,7 +216,7 @@
         },
         "select": {
           "title": "Choose a charging location",
-          "description": "Sorted by distance, with current availability, power and price when known.",
+          "description": "Sorted by distance, with current availability, power and price when known. {hidden}",
           "data": {
             "location_id": "Charging location"
           }
