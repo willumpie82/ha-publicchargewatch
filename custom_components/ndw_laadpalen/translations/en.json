@@ -1,0 +1,164 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose a data source",
+        "description": "**NDW** (Netherlands only)\n- ✅ Live availability per connector type\n- ✅ Exact tariffs incl. VAT, straight from the operator\n- ✅ No account or API key needed\n- ⚠️ Downloads ~5 MB on every refresh (up to about 1.4 GB per day)\n\n**Open Charge Map** (worldwide)\n- ✅ Also works outside the Netherlands\n- ✅ Light on data traffic (a few kB)\n- ⚠️ Needs a free API key\n- ⚠️ No live occupancy: only whether a point has been reported as working\n- ⚠️ Community data that may be outdated; prices are free text",
+        "data": {
+          "source": "Data source"
+        }
+      },
+      "api_key": {
+        "title": "Open Charge Map API key",
+        "description": "Create a free account and request an API key on the [Open Charge Map API page]({api_url}).",
+        "data": {
+          "api_key": "API key"
+        }
+      },
+      "ndw_confirm": {
+        "title": "Download NDW data?",
+        "description": "To show live availability the integration downloads a nationwide NDW file: **~5 MB** (~41 MB unpacked). NDW offers no regional filter, so the whole file is needed.\n\n- **Now:** a one-off download to search your area.\n- **After that:** again on every refresh (every 5 minutes by default, up to about 1.4 GB per day). You choose the interval shortly.\n- **Prices** come from a separate file (~4 MB) fetched at most once per day.\n\nOn a metered connection, Open Charge Map is the better choice.",
+        "menu_options": {
+          "fetch": "Continue and download",
+          "user": "Back to source choice"
+        }
+      },
+      "location_method": {
+        "title": "Where to search?",
+        "description": "Choose how to give the search location.",
+        "menu_options": {
+          "zone": "A zone (for example Home)",
+          "postcode": "Postcode (Netherlands only)",
+          "map": "A point on the map"
+        }
+      },
+      "zone": {
+        "title": "Search around a zone",
+        "data": {
+          "zone": "Zone",
+          "radius": "Search radius"
+        }
+      },
+      "postcode": {
+        "title": "Search around a postcode",
+        "description": "With a house number the search is around that address, without one around the middle of the postcode.",
+        "data": {
+          "postcode": "Postcode",
+          "house_number": "House number (optional)",
+          "radius": "Search radius"
+        }
+      },
+      "map": {
+        "title": "Search around a point",
+        "description": "Move the pin and set the radius. The pin starts at your home location.",
+        "data": {
+          "location": "Search area"
+        }
+      },
+      "problem": {
+        "title": "That did not work",
+        "description": "Press Submit to try again."
+      },
+      "select": {
+        "title": "Choose a charging location",
+        "description": "Sorted by distance, with current availability, power and price when known.",
+        "data": {
+          "location_id": "Charging location"
+        }
+      },
+      "interval_ndw": {
+        "title": "Refresh",
+        "description": "How often should availability be refreshed? Every refresh downloads ~5 MB: at 5 minutes that is up to about 1.4 GB per day. Minimum {minimum} seconds. Prices are refreshed at most once per day.",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      },
+      "interval_ocm": {
+        "title": "Refresh",
+        "description": "How often should the data be fetched? OCM data rarely changes, so a low frequency is fine. Minimum {minimum} seconds.",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Renew Open Charge Map API key",
+        "description": "The API key is no longer accepted. Request a new one on the [Open Charge Map API page]({api_url}).",
+        "data": {
+          "api_key": "API key"
+        }
+      }
+    },
+    "progress": {
+      "fetch": "Fetching NDW data (~5 MB)…",
+      "search": "Searching for charging locations nearby…"
+    },
+    "error": {
+      "cannot_connect": "Could not fetch the data.",
+      "invalid_auth": "Invalid API key.",
+      "no_locations": "No charging locations found in this area. Increase the radius or pick another place.",
+      "postcode_invalid": "That is not a valid Dutch postcode (for example 5223 HS).",
+      "postcode_not_found": "Postcode not found.",
+      "zone_not_found": "This zone has no location."
+    },
+    "abort": {
+      "already_configured": "This charging location is already added.",
+      "reauth_successful": "API key updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "source": {
+      "options": {
+        "ndw": "NDW – Netherlands only, live availability",
+        "ocm": "Open Charge Map – worldwide, API key, no live occupancy"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "available_points": {
+        "name": "Available charge points"
+      },
+      "group_available": {
+        "name": "Available – {group}"
+      },
+      "operational_points": {
+        "name": "Operational charge points"
+      },
+      "price_per_kwh": {
+        "name": "Price per kWh"
+      },
+      "last_updated": {
+        "name": "Last updated"
+      },
+      "evse_status": {
+        "name": "Status",
+        "state": {
+          "available": "Available",
+          "blocked": "Blocked",
+          "charging": "Charging",
+          "inoperative": "Inoperative",
+          "operational": "Operational",
+          "outoforder": "Out of order",
+          "planned": "Planned",
+          "removed": "Removed",
+          "reserved": "Reserved",
+          "unknown": "Unknown"
+        }
+      }
+    },
+    "binary_sensor": {
+      "any_available": {
+        "name": "Charge point available"
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "domain": "ndw_laadpalen",
+  "name": "NDW Laadpalen",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/CHANGE_ME/ha-ndw-laadpalen",
+  "issue_tracker": "https://github.com/CHANGE_ME/ha-ndw-laadpalen/issues",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": ["ijson==3.3.0"],
+  "version": "0.1.0"
+}

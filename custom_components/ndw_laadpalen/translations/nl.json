@@ -1,0 +1,164 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Databron kiezen",
+        "description": "**NDW** (alleen Nederland)\n- ✅ Live beschikbaarheid per connectortype\n- ✅ Exacte tarieven incl. btw, rechtstreeks van de exploitant\n- ✅ Geen account of API-key nodig\n- ⚠️ Downloadt bij elke verversing ~5 MB (tot ca. 1,4 GB per dag)\n\n**Open Charge Map** (wereldwijd)\n- ✅ Werkt ook buiten Nederland\n- ✅ Zuinig met dataverkeer (enkele kB)\n- ⚠️ Gratis API-key nodig\n- ⚠️ Geen live bezetting: alleen of een paal als werkend is gemeld\n- ⚠️ Community-data die verouderd kan zijn; prijzen zijn vrije tekst",
+        "data": {
+          "source": "Databron"
+        }
+      },
+      "api_key": {
+        "title": "Open Charge Map API-key",
+        "description": "Maak een gratis account aan en vraag een API-key aan op de [Open Charge Map API-pagina]({api_url}).",
+        "data": {
+          "api_key": "API-key"
+        }
+      },
+      "ndw_confirm": {
+        "title": "NDW-gegevens downloaden?",
+        "description": "Om de live beschikbaarheid te tonen downloadt de integratie een landelijk bestand van NDW: **~5 MB** (~41 MB uitgepakt). NDW biedt geen filter per regio, dus het hele bestand is nodig.\n\n- **Nu:** eenmalig downloaden om je omgeving te doorzoeken.\n- **Daarna:** bij elke verversing opnieuw (standaard elke 5 minuten, tot ca. 1,4 GB per dag). Het interval kies je straks zelf.\n- **Prijzen** komen uit een apart bestand (~4 MB) dat hooguit 1× per dag wordt opgehaald.\n\nOp een beperkte dataverbinding kun je beter Open Charge Map kiezen.",
+        "menu_options": {
+          "fetch": "Doorgaan en downloaden",
+          "user": "Terug naar bronkeuze"
+        }
+      },
+      "location_method": {
+        "title": "Waar zoeken?",
+        "description": "Kies hoe je de zoekplek opgeeft.",
+        "menu_options": {
+          "zone": "Een zone (bijvoorbeeld Thuis)",
+          "postcode": "Postcode (alleen Nederland)",
+          "map": "Een punt op de kaart"
+        }
+      },
+      "zone": {
+        "title": "Zoeken rond een zone",
+        "data": {
+          "zone": "Zone",
+          "radius": "Zoekradius"
+        }
+      },
+      "postcode": {
+        "title": "Zoeken rond een postcode",
+        "description": "Met huisnummer zoek je rond dat adres, zonder huisnummer rond het midden van de postcode.",
+        "data": {
+          "postcode": "Postcode",
+          "house_number": "Huisnummer (optioneel)",
+          "radius": "Zoekradius"
+        }
+      },
+      "map": {
+        "title": "Zoeken rond een punt",
+        "description": "Verplaats de pin en stel de radius in. De pin begint op je thuislocatie.",
+        "data": {
+          "location": "Zoekgebied"
+        }
+      },
+      "problem": {
+        "title": "Dat is niet gelukt",
+        "description": "Druk op Verzenden om het opnieuw te proberen."
+      },
+      "select": {
+        "title": "Kies een laadlocatie",
+        "description": "Gesorteerd op afstand, met de huidige beschikbaarheid, het vermogen en de prijs als die bekend zijn.",
+        "data": {
+          "location_id": "Laadlocatie"
+        }
+      },
+      "interval_ndw": {
+        "title": "Verversing",
+        "description": "Hoe vaak moet de beschikbaarheid worden ververst? Elke verversing downloadt ~5 MB: bij 5 minuten is dat tot ca. 1,4 GB per dag. Minimum {minimum} seconden. Prijzen worden hooguit 1× per dag vernieuwd.",
+        "data": {
+          "scan_interval": "Ververstijd (seconden)"
+        }
+      },
+      "interval_ocm": {
+        "title": "Verversing",
+        "description": "Hoe vaak moeten de gegevens worden opgehaald? OCM-gegevens veranderen zelden, dus een lage frequentie is prima. Minimum {minimum} seconden.",
+        "data": {
+          "scan_interval": "Ververstijd (seconden)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Open Charge Map API-key vernieuwen",
+        "description": "De API-key wordt niet meer geaccepteerd. Vraag een nieuwe aan op de [Open Charge Map API-pagina]({api_url}).",
+        "data": {
+          "api_key": "API-key"
+        }
+      }
+    },
+    "progress": {
+      "fetch": "NDW-gegevens ophalen (~5 MB)…",
+      "search": "Laadlocaties zoeken in de omgeving…"
+    },
+    "error": {
+      "cannot_connect": "Kan de gegevens niet ophalen.",
+      "invalid_auth": "Ongeldige API-key.",
+      "no_locations": "Geen laadlocaties gevonden in dit gebied. Vergroot de radius of kies een andere plek.",
+      "postcode_invalid": "Dit is geen geldige Nederlandse postcode (bijvoorbeeld 5223 HS).",
+      "postcode_not_found": "Postcode niet gevonden.",
+      "zone_not_found": "Deze zone heeft geen locatie."
+    },
+    "abort": {
+      "already_configured": "Deze laadlocatie is al toegevoegd.",
+      "reauth_successful": "API-key bijgewerkt."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Ververstijd (seconden)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "source": {
+      "options": {
+        "ndw": "NDW – alleen Nederland, live beschikbaarheid",
+        "ocm": "Open Charge Map – wereldwijd, API-key, geen live bezetting"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "available_points": {
+        "name": "Vrije laadpunten"
+      },
+      "group_available": {
+        "name": "Vrij – {group}"
+      },
+      "operational_points": {
+        "name": "Werkende laadpunten"
+      },
+      "price_per_kwh": {
+        "name": "Prijs per kWh"
+      },
+      "last_updated": {
+        "name": "Bijgewerkt"
+      },
+      "evse_status": {
+        "name": "Status",
+        "state": {
+          "available": "Vrij",
+          "blocked": "Geblokkeerd",
+          "charging": "Laden",
+          "inoperative": "Buiten gebruik",
+          "operational": "Werkend",
+          "outoforder": "Defect",
+          "planned": "Gepland",
+          "removed": "Verwijderd",
+          "reserved": "Gereserveerd",
+          "unknown": "Onbekend"
+        }
+      }
+    },
+    "binary_sensor": {
+      "any_available": {
+        "name": "Laadpunt vrij"
+      }
+    }
+  }
+}
