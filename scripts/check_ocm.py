@@ -18,7 +18,7 @@ import types
 import aiohttp
 
 # Load the integration's modules without executing its __init__ (needs Home Assistant).
-pkg_dir = Path(__file__).parent.parent / "custom_components/ndw_laadpalen"
+pkg_dir = Path(__file__).parent.parent / "custom_components/public_charge_watch"
 pkg = types.ModuleType("ndw_pkg")
 pkg.__path__ = [str(pkg_dir)]
 sys.modules["ndw_pkg"] = pkg

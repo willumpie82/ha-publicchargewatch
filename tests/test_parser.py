@@ -3,7 +3,7 @@
 import gzip
 import json
 
-from custom_components.ndw_laadpalen import parser
+from custom_components.public_charge_watch import parser
 
 from .conftest import HOME_LAT, HOME_LON, NDW_FEED
 
@@ -33,7 +33,7 @@ def test_other_layout_falls_back_to_streaming():
 def test_tariff_fast_path_matches_streaming_parser():
     from datetime import date
 
-    from custom_components.ndw_laadpalen import ndw_tariff
+    from custom_components.public_charge_watch import ndw_tariff
 
     tariffs = [
         {"id": f"t{i}", "country_code": "NL", "currency": "EUR",

@@ -1,5 +1,4 @@
 {
-  "name": "NDW Laadpalen",
-  "homeassistant": "2024.11.0",
-  "country": "NL"
+  "name": "PublicChargeWatch",
+  "homeassistant": "2025.3.0"
 }

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-OUT = Path(__file__).parent.parent / "custom_components/ndw_laadpalen/brand"
+OUT = Path(__file__).parent.parent / "custom_components/public_charge_watch/brand"
 ORANGE = (249, 115, 22, 255)
 WHITE = (255, 255, 255, 255)
 SIZE = 2048  # drawn large, then downscaled for smooth edges

@@ -2,7 +2,7 @@
 
 from homeassistant.setup import async_setup_component
 
-from custom_components.ndw_laadpalen.const import DOMAIN
+from custom_components.public_charge_watch.const import DOMAIN
 
 from .test_flows import _add_ndw_location
 

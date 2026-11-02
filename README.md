@@ -1,4 +1,4 @@
-# NDW Laadpalen (Home Assistant / HACS)
+# PublicChargeWatch (Home Assistant / HACS)
 
 Public EV chargers as Home Assistant devices, from one of two sources chosen in the setup flow.
 
@@ -15,7 +15,7 @@ The old oplaadpalen.nl API is gone (`410 Gone`).
 
 ## Install
 HACS → Custom repositories → add this repo (type: Integration) → install → restart HA.
-Settings → Devices & services → Add integration → "NDW Laadpalen".
+Settings → Devices & services → Add integration → "PublicChargeWatch".
 
 ## Structure
 **Source** (NDW / Open Charge Map, one entry each) → **place** (a town, one subentry) →

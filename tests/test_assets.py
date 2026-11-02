@@ -5,9 +5,9 @@ from pathlib import Path
 
 from PIL import Image
 
-from custom_components.ndw_laadpalen.const import EVSE_STATUSES
+from custom_components.public_charge_watch.const import EVSE_STATUSES
 
-PKG = Path(__file__).parent.parent / "custom_components/ndw_laadpalen"
+PKG = Path(__file__).parent.parent / "custom_components/public_charge_watch"
 
 
 def test_brand_images():

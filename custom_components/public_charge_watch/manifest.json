@@ -1,0 +1,14 @@
+{
+  "domain": "public_charge_watch",
+  "name": "PublicChargeWatch",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/willumpie82/ha-publicchargewatch",
+  "issue_tracker": "https://github.com/willumpie82/ha-publicchargewatch/issues",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": [
+    "ijson==3.3.0"
+  ],
+  "version": "0.2.0"
+}

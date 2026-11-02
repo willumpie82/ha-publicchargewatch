@@ -7,8 +7,8 @@ import json
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMockResponse
 
-from custom_components.ndw_laadpalen.const import FEED_URL, TARIFF_URL
-from custom_components.ndw_laadpalen.geocode import PDOK_URL
+from custom_components.public_charge_watch.const import FEED_URL, TARIFF_URL
+from custom_components.public_charge_watch.geocode import PDOK_URL
 
 # zone.home in the test hass instance
 HOME_LAT, HOME_LON = 32.87336, -117.22743
@@ -16,7 +16,7 @@ HOME_LAT, HOME_LON = 32.87336, -117.22743
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
-    """Let Home Assistant load custom_components/ndw_laadpalen."""
+    """Let Home Assistant load custom_components/public_charge_watch."""
 
 
 def _gz(obj) -> bytes:
@@ -131,7 +131,7 @@ def mock_ndw(aioclient_mock):
 
 @pytest.fixture
 def mock_ocm(aioclient_mock):
-    from custom_components.ndw_laadpalen.ocm import OCM_URL
+    from custom_components.public_charge_watch.ocm import OCM_URL
 
     aioclient_mock.get(OCM_URL, json=[OCM_POI])
     return aioclient_mock

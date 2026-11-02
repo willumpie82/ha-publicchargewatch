@@ -4,12 +4,12 @@ from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.ndw_laadpalen.const import DOMAIN, TARIFF_URL
-from custom_components.ndw_laadpalen.geocode import PDOK_URL
-from custom_components.ndw_laadpalen.ocm import OCM_URL
+from custom_components.public_charge_watch.const import DOMAIN, TARIFF_URL
+from custom_components.public_charge_watch.geocode import PDOK_URL
+from custom_components.public_charge_watch.ocm import OCM_URL
 
 from .conftest import HOME_LAT, HOME_LON, NDW_FEED, _gz
-from custom_components.ndw_laadpalen.const import FEED_URL
+from custom_components.public_charge_watch.const import FEED_URL
 
 
 async def _progress(hass, result):
@@ -151,7 +151,7 @@ async def test_removing_a_device_removes_the_location_from_its_place(hass, mock_
     device = dr.async_get(hass).async_get_device_by_identifier(
         (DOMAIN, "NL-NUO-two"), entry.entry_id
     )
-    from custom_components.ndw_laadpalen import async_remove_config_entry_device
+    from custom_components.public_charge_watch import async_remove_config_entry_device
 
     assert await async_remove_config_entry_device(hass, entry, device)
     (place,) = entry.subentries.values()
@@ -260,7 +260,7 @@ async def test_ocm_flow_has_no_ndw_download_and_other_entities(hass, mock_ocm):
 
 
 async def test_refresh_button_forces_a_new_check(hass, mock_ndw):
-    from custom_components.ndw_laadpalen.const import FEED_URL
+    from custom_components.public_charge_watch.const import FEED_URL
 
     await _add_ndw_location(hass, "NL-NUO-near")
     button = _entity(hass, "button", "NL-NUO-near_refresh")
@@ -278,8 +278,8 @@ async def test_refresh_button_forces_a_new_check(hass, mock_ndw):
 async def test_entries_share_one_download(hass, mock_ndw):
     from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-    from custom_components.ndw_laadpalen.api import NdwFeed
-    from custom_components.ndw_laadpalen.const import FEED_URL
+    from custom_components.public_charge_watch.api import NdwFeed
+    from custom_components.public_charge_watch.const import FEED_URL
 
     feed = NdwFeed(hass, async_get_clientsession(hass))
     calls = lambda: sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL)  # noqa: E731

@@ -12,7 +12,7 @@ import types
 import aiohttp
 
 pkg = types.ModuleType("ndw_pkg")
-pkg.__path__ = [str(Path(__file__).parent.parent / "custom_components/ndw_laadpalen")]
+pkg.__path__ = [str(Path(__file__).parent.parent / "custom_components/public_charge_watch")]
 sys.modules["ndw_pkg"] = pkg
 geo = importlib.import_module("ndw_pkg.geocode")
 

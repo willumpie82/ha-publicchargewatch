@@ -1,7 +1,7 @@
-# NDW Laadpalen — contributor notes
+# PublicChargeWatch — contributor notes
 
 Home Assistant custom integration (HACS) showing public EV chargers as devices. Domain
-`ndw_laadpalen`, code in `custom_components/ndw_laadpalen/`. User docs are in `README.md`; this
+`public_charge_watch`, code in `custom_components/public_charge_watch/`. User docs are in `README.md`; this
 file is what you need to change the code safely.
 
 ## Structure
@@ -74,5 +74,5 @@ layout (`{"id":…,"type":"Feature","geometry":…`) for the fast parser path to
 
 ## Release
 Bump `version` in `manifest.json`, push, then
-`gh release create vX.Y.Z --repo willumpie82/ha-ndw-laadpalen --title vX.Y.Z --notes …`.
+`gh release create vX.Y.Z --repo willumpie82/ha-publicchargewatch --title vX.Y.Z --notes …`.
 HACS also works without releases (it then offers the default branch).

@@ -1,6 +1,6 @@
-"""Constants for the NDW Laadpalen integration."""
+"""Constants for the PublicChargeWatch integration."""
 
-DOMAIN = "ndw_laadpalen"
+DOMAIN = "public_charge_watch"
 
 NDW_BASE_URL = "https://opendata.ndw.nu/"
 FEED_URL = NDW_BASE_URL + "charging_point_locations.geojson.gz"
