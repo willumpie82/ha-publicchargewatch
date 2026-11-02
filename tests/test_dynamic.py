@@ -168,3 +168,26 @@ async def test_nearest_refresh_button_checks_the_feed_again(hass, mock_ndw):
     await hass.services.async_call("button", "press", {"entity_id": button}, blocking=True)
     await hass.async_block_till_done()
     assert sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL) > before
+
+
+async def test_dynamic_device_is_named_after_the_followed_entity_and_linked_to_the_best_charger(hass, mock_ndw):
+    from homeassistant.helpers import device_registry as dr
+
+    hass.states.async_set(
+        "person.me", "home", {"latitude": HOME_LAT, "longitude": HOME_LON, "friendly_name": "Willem"}
+    )
+    await _add_ndw_location(hass, "NL-NUO-near")  # Teststraat 1 is a configured location
+    entry, dynamic = await _add_dynamic(hass)
+    registry = dr.async_get(hass)
+    device = registry.async_get_device_by_identifier(
+        (DOMAIN, f"dynamic_{dynamic.subentry_id}"), entry.entry_id
+    )
+    charger = registry.async_get_device_by_identifier((DOMAIN, "NL-NUO-near"), entry.entry_id)
+    assert device.name == "Car · Willem" and device.via_device_id == charger.id
+
+    # the best one is now Teststraat 2, which is not a configured location: no link
+    await _update_feed(hass, mock_ndw, 0)
+    await entry.runtime_data.dynamic[dynamic.subentry_id].async_refresh()
+    await hass.async_block_till_done()
+    device = registry.async_get(device.id)
+    assert device.name == "Car · Willem" and device.via_device_id is None

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
@@ -57,17 +58,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: NdwConfigEntry) -> bool:
     coordinator = NdwCoordinator(hass, entry, get_client(hass, entry.data))
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
-    for subentry in entry.subentries.values():
-        if subentry.subentry_type == SUBENTRY_DYNAMIC:
-            await _async_setup_dynamic(hass, entry, coordinator, subentry)
+    labels = [
+        await _async_setup_dynamic(hass, entry, coordinator, subentry)
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_DYNAMIC
+    ]
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    for label in labels:  # the devices exist now
+        label()
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
 
 
 async def _async_setup_dynamic(
     hass: HomeAssistant, entry: NdwConfigEntry, coordinator: NdwCoordinator, subentry
-) -> None:
+) -> Callable[[], None]:
     dynamic = DynamicCoordinator(hass, entry, subentry, get_client(hass, entry.data))
     await dynamic.async_config_entry_first_refresh()
     coordinator.dynamic[subentry.subentry_id] = dynamic
@@ -85,6 +90,33 @@ async def _async_setup_dynamic(
     entry.async_on_unload(
         async_track_state_change_event(hass, [dynamic.tracked_entity], _moved)
     )
+
+    @callback
+    def _label_device() -> None:
+        """Name the device after the followed entity; link it to the best charger's device."""
+        registry = dr.async_get(hass)
+        device = registry.async_get_device_by_identifier(
+            (DOMAIN, f"dynamic_{subentry.subentry_id}"), entry.entry_id
+        )
+        if device is None:  # the entities have not been added yet
+            return
+        state = hass.states.get(dynamic.tracked_entity)
+        followed = state.name if state else dynamic.tracked_entity
+        results = dynamic.data["results"]
+        best = results[0] if results else None
+        target = (
+            registry.async_get_device_by_identifier((DOMAIN, best["id"]), entry.entry_id)
+            if best
+            else None
+        )
+        registry.async_update_device(
+            device.id,
+            name=f"{subentry.title} · {followed}",
+            via_device_id=target.id if target else None,
+        )
+
+    entry.async_on_unload(dynamic.async_add_listener(_label_device))
+    return _label_device
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: NdwConfigEntry) -> bool:
