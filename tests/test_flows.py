@@ -318,3 +318,55 @@ async def test_stale_feed_is_downloaded_in_its_own_progress_step(hass, mock_ndw)
     flow = await _progress_sub(hass, flow)
     assert flow["step_id"] == "select"
     assert sum(1 for m in mock_ndw.mock_calls if str(m[1]) == FEED_URL) == before + 1
+
+
+async def _update_feed(hass, mock_ndw, available):
+    """Serve a feed where NL-NUO-near has this many free points and refresh."""
+    from .conftest import NEAR_FREE
+
+    NEAR_FREE["n"] = available
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    entry.runtime_data._force = True  # the button's refresh is debounced; refresh directly
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+
+async def test_events_fire_when_a_location_gets_free_or_full(hass, mock_ndw):
+    await _add_ndw_location(hass, "NL-NUO-near")  # 1 of 2 free
+    event = _entity(hass, "event", "NL-NUO-near_availability")
+    assert event is not None
+    async def last_type():
+        return hass.states.get(event).attributes.get("event_type")
+
+    await _update_feed(hass, mock_ndw, 0)
+    assert await last_type() == "became_occupied"
+    await _update_feed(hass, mock_ndw, 2)
+    assert await last_type() == "became_available"
+    assert hass.states.get(event).attributes["free"] == 2
+
+
+async def test_notify_entity_gates_the_events(hass, mock_ndw):
+    await _add_ndw_location(hass, "NL-NUO-near")
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    (place,) = entry.subentries.values()
+
+    # reconfigure: choose a notify entity for the location
+    flow = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, "location"),
+        context={"source": "reconfigure", "subentry_id": place.subentry_id},
+    )
+    assert flow["step_id"] == "notify"  # one location in the place: no choice needed
+    flow = await _configure_sub(hass, flow, {"notify_entity": "input_boolean.need_charge"})
+    assert flow["type"] is FlowResultType.ABORT and flow["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    (place,) = entry.subentries.values()
+    assert place.data["notify_entities"] == {"NL-NUO-near": "input_boolean.need_charge"}
+
+    event = _entity(hass, "event", "NL-NUO-near_availability")
+    hass.states.async_set("input_boolean.need_charge", "off")
+    await _update_feed(hass, mock_ndw, 0)
+    assert hass.states.get(event).attributes.get("event_type") is None  # gate closed
+
+    hass.states.async_set("input_boolean.need_charge", "on")
+    await _update_feed(hass, mock_ndw, 1)
+    assert hass.states.get(event).attributes["event_type"] == "became_available"

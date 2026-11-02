@@ -23,7 +23,7 @@ from .const import (
 from .coordinator import NdwCoordinator, iter_locations
 from .ocm import OcmClient
 
-PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON, Platform.EVENT]
 
 type NdwConfigEntry = ConfigEntry[NdwCoordinator]
 

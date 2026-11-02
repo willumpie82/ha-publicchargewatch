@@ -55,6 +55,8 @@ from .const import (
     CONF_CITY,
     CONF_LOCATION_ID,
     CONF_LOCATION_IDS,
+    CONF_NOTIFY,
+    CONF_NOTIFY_ENTITY,
     CONF_POSTCODE,
     CONF_RADIUS,
     CONF_SCAN_INTERVAL,
@@ -644,3 +646,58 @@ class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):
             data=_place_data(city, [loc["id"]]),
             unique_id=key,
         )
+
+    # --- reconfigure: choose a notify entity per location ---------------------------
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        place = self._get_reconfigure_subentry()
+        ids = place.data[CONF_LOCATION_IDS]
+        if user_input is not None and CONF_LOCATION_ID in user_input:
+            self._configure_id = user_input[CONF_LOCATION_ID]
+            return await self.async_step_notify()
+        if len(ids) == 1:
+            self._configure_id = ids[0]
+            return await self.async_step_notify()
+        coordinator = getattr(self._get_entry(), "runtime_data", None)
+        names = {
+            i: (coordinator.data.get(i, {}).get("address") if coordinator else None) or i
+            for i in ids
+        }
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_LOCATION_ID, default=ids[0]): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[SelectOptionDict(value=i, label=names[i]) for i in ids],
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                )
+            }
+        )
+        return self.async_show_form(step_id="reconfigure", data_schema=schema)
+
+    async def async_step_notify(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        place = self._get_reconfigure_subentry()
+        notify = dict(place.data.get(CONF_NOTIFY, {}))
+        if user_input is not None:
+            if entity := user_input.get(CONF_NOTIFY_ENTITY):
+                notify[self._configure_id] = entity
+            else:
+                notify.pop(self._configure_id, None)
+            return self.async_update_and_abort(
+                self._get_entry(), place, data_updates={CONF_NOTIFY: notify}
+            )
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_NOTIFY_ENTITY,
+                    description={"suggested_value": notify.get(self._configure_id)},
+                ): EntitySelector(
+                    EntitySelectorConfig(domain=["binary_sensor", "input_boolean"])
+                )
+            }
+        )
+        return self.async_show_form(step_id="notify", data_schema=schema)

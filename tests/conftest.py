@@ -1,9 +1,11 @@
 """Shared fixtures: small synthetic NDW/OCM payloads and network mocks."""
 
+import copy
 import gzip
 import json
 
 import pytest
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMockResponse
 
 from custom_components.ndw_laadpalen.const import FEED_URL, TARIFF_URL
 from custom_components.ndw_laadpalen.geocode import PDOK_URL
@@ -93,13 +95,12 @@ OCM_POI = {
 }
 
 
+NEAR_FREE = {"n": None}
 CITY = {"name": "Teststad"}
 
 
 def mock_city(aioclient_mock, city="Teststad"):
     """PDOK reverse geocoding: every point is in CITY['name'] (change it mid-test)."""
-    from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMockResponse
-
     CITY["name"] = city
 
     async def reverse(method, url, data):
@@ -113,7 +114,16 @@ def mock_city(aioclient_mock, city="Teststad"):
 @pytest.fixture
 def mock_ndw(aioclient_mock):
     headers = {"ETag": '"v1"'}
-    aioclient_mock.get(FEED_URL, content=_gz(NDW_FEED), headers=headers)
+    NEAR_FREE["n"] = None
+
+    async def feed(method, url, data):
+        body = NDW_FEED
+        if NEAR_FREE["n"] is not None:  # tests change the availability mid-test
+            body = copy.deepcopy(NDW_FEED)
+            body["features"][0]["properties"]["availabilities"][0]["available"] = NEAR_FREE["n"]
+        return AiohttpClientMockResponse(method, url, response=_gz(body), headers=headers)
+
+    aioclient_mock.get(FEED_URL, side_effect=feed)
     aioclient_mock.get(TARIFF_URL, content=_gz(NDW_TARIFFS), headers=headers)
     mock_city(aioclient_mock, "Teststad")
     return aioclient_mock

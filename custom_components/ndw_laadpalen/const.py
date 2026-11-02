@@ -45,3 +45,5 @@ EVSE_STATUSES = [
 SUBENTRY_LOCATION = "location"  # one subentry per place (city)
 CONF_CITY = "city"
 CONF_LOCATION_IDS = "location_ids"
+CONF_NOTIFY = "notify_entities"  # {location_id: entity_id} that gates availability events
+CONF_NOTIFY_ENTITY = "notify_entity"

@@ -41,6 +41,10 @@ Further locations repeat steps 3–4 only (already added ones are hidden).
   binary sensor.
 - A diagnostic *Refresh* button checks for new data right now (bypasses the shared 60 s window;
   the ETag still skips the download when NDW's file is unchanged).
+- NDW: an *Availability* event entity per location fires `became_available` (first free charge
+  point) and `became_occupied` (last one taken), with `free`, `total` and `address` as attributes.
+  Optionally gate it: on the place (⋮ → Reconfigure) pick a binary sensor or input boolean per
+  location; events then only fire while that entity is on (e.g. "I need to charge").
 - NDW with several connector groups (e.g. Type 2 + CCS): one *available* sensor per group.
 - OCM: a status sensor per connection group (`Quantity` = identical sockets, as attribute).
 - Price attributes: source text, basis (`tariff`, `per_kwh`, `assumed_per_kwh`, `free`, `unknown`),

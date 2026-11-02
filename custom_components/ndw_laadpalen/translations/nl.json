@@ -169,6 +169,19 @@
       "refresh": {
         "name": "Verversen"
       }
+    },
+    "event": {
+      "availability": {
+        "name": "Beschikbaarheid",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "became_available": "Vrij gekomen",
+              "became_occupied": "Bezet geraakt"
+            }
+          }
+        }
+      }
     }
   },
   "config_subentries": {
@@ -220,6 +233,19 @@
           "data": {
             "location_id": "Laadlocatie"
           }
+        },
+        "reconfigure": {
+          "title": "Welke laadlocatie?",
+          "data": {
+            "location_id": "Laadlocatie"
+          }
+        },
+        "notify": {
+          "title": "Melding bij vrijkomen",
+          "description": "Kies optioneel een schakelaar (binary sensor of input boolean). Is die aan, dan geeft de laadlocatie een gebeurtenis als er een laadpunt vrijkomt of bezet raakt. Leeg laten = altijd een gebeurtenis.",
+          "data": {
+            "notify_entity": "Notify-entiteit"
+          }
         }
       },
       "progress": {
@@ -237,7 +263,8 @@
       "abort": {
         "already_configured": "Deze laadlocatie is al toegevoegd.",
         "cannot_connect": "Kan de NDW-gegevens niet ophalen.",
-        "location_added": "{place} bestond al: de laadlocatie is daaraan toegevoegd."
+        "location_added": "{place} bestond al: de laadlocatie is daaraan toegevoegd.",
+        "reconfigure_successful": "Opgeslagen."
       }
     }
   }

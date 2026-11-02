@@ -169,6 +169,19 @@
       "refresh": {
         "name": "Refresh"
       }
+    },
+    "event": {
+      "availability": {
+        "name": "Availability",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "became_available": "Became available",
+              "became_occupied": "Became occupied"
+            }
+          }
+        }
+      }
     }
   },
   "config_subentries": {
@@ -220,6 +233,19 @@
           "data": {
             "location_id": "Charging location"
           }
+        },
+        "reconfigure": {
+          "title": "Which charging location?",
+          "data": {
+            "location_id": "Charging location"
+          }
+        },
+        "notify": {
+          "title": "Notify when free",
+          "description": "Optionally pick a switch (binary sensor or input boolean). While it is on, the location fires an event when a charge point becomes free or occupied. Leave empty to always fire.",
+          "data": {
+            "notify_entity": "Notify entity"
+          }
         }
       },
       "progress": {
@@ -237,7 +263,8 @@
       "abort": {
         "already_configured": "This location is already added.",
         "cannot_connect": "Could not fetch the NDW data.",
-        "location_added": "{place} already existed: the charging location was added to it."
+        "location_added": "{place} already existed: the charging location was added to it.",
+        "reconfigure_successful": "Saved."
       }
     }
   }
