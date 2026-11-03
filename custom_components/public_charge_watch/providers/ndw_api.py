@@ -69,6 +69,7 @@ class NdwApi(Provider):
         self._tariffs = tariffs
         self._gap = asyncio.Lock()  # one request at a time, spaced out
         self._last_request = 0.0
+        self.lookup_radius_m = DOTNL_LOCATION_RADIUS_M  # set from the entry's options
 
     async def _fetch(self, bbox: str) -> list[dict[str, Any]]:
         """All locations in the area, slimmed (large areas come in pages of 1000)."""
@@ -193,13 +194,13 @@ class NdwApi(Provider):
         found: dict[str, dict[str, Any]] = {}
         while remaining:
             pivot_id, (lat, lon) = next(iter(remaining.items()))
-            for loc in await self._fetch(bounding_box(lat, lon, DOTNL_LOCATION_RADIUS_M)):
+            for loc in await self._fetch(bounding_box(lat, lon, self.lookup_radius_m)):
                 if loc["id"] in ids:
                     found[loc["id"]] = loc
             remaining = {
                 i: c
                 for i, c in remaining.items()
-                if i != pivot_id and distance_m(lat, lon, *c) > DOTNL_LOCATION_RADIUS_M
+                if i != pivot_id and distance_m(lat, lon, *c) > self.lookup_radius_m
             }
         tariff_ids = {
             t for loc in found.values() for g in loc["groups"] for t in g["tariff_ids"]

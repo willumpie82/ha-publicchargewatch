@@ -118,9 +118,10 @@
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Ververstijd (seconden)"
+          "scan_interval": "Ververstijd (seconden)",
+          "lookup_radius": "Zoekstraal (meter)"
         },
-        "description": "Geldt voor alle laadlocaties van deze bron."
+        "description": "Geldt voor alle locaties van deze bron. De zoekstraal is het gebied dat bij NDW wordt opgevraagd rond elke locatie: groter betekent minder verzoeken (nabije locaties delen er één) maar meer data."
       }
     }
   },

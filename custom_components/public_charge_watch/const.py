@@ -15,6 +15,7 @@ CONF_ZONE = "zone"
 CONF_POSTCODE = "postcode"
 CONF_HOUSE_NUMBER = "house_number"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_LOOKUP_RADIUS = "lookup_radius"
 
 SOURCE_NDW = "ndw"  # Netherlands only; live availability; ~5 MB per refresh
 SOURCE_OCM = "ocm"  # worldwide; API key; no live occupancy; small requests
@@ -64,7 +65,8 @@ DOTNL_URL = (
 )
 DOTNL_MAX_BBOX_DEG2 = 1.0  # the API refuses larger areas
 DOTNL_REQUEST_GAP = 0.11  # seconds between requests (the API is rate limited)
-DOTNL_LOCATION_RADIUS_M = 150  # area asked for around a known location
+DOTNL_LOCATION_RADIUS_M = 150  # default area asked for around a known location (option)
+DOTNL_RADIUS_RANGE_M = (50, 1000)
 CONF_COORDS = "coordinates"  # {location_id: [latitude, longitude]} stored in a place
 
 # OCPI connector types (as NDW reports them) -> display names

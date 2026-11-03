@@ -118,9 +118,10 @@
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Update interval (seconds)"
+          "scan_interval": "Update interval (seconds)",
+          "lookup_radius": "Lookup radius (metres)"
         },
-        "description": "Applies to all locations of this source."
+        "description": "Applies to all locations of this source. The lookup radius is the area asked from NDW around each location: larger means fewer requests (nearby locations share one) but more data."
       }
     }
   },

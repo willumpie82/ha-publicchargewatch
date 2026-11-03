@@ -40,7 +40,7 @@ is missing from the data.
 `https://dotnl.ndw.nu/api/rest/geojson/dynamic-road-status/charge-point-data/v1/features?bbox=w,s,e,n`
 returns the same features as the bulk file for one area (no key; max 1 square degree; ~9 requests/s).
 Things found by testing it live: there is **no lookup by id** (so places store `coordinates` per
-location and known locations are fetched through a 150 m box around them); answers above 1000
+location and known locations are fetched through a box around them, 150 m by default, option `lookup_radius`); answers above 1000
 locations are paged and the `Link: rel="next"` URL has a **wrong path** (404): only its `cursor` is
 usable, on the normal endpoint; multi-page answers come up a few locations short of
 `x-total-count` (tolerated up to 1%, single pages must be complete); a 429 (seen about once in 8 refreshes, even at low volume, so it looks like a limit on NDW's side) is retried once after a short wait, and a coordinator keeps its last data for up to 3 update intervals before going unavailable (`ProviderRateLimitError`). Tariffs are shared with the bulk provider (`NdwTariffs`, one daily download).

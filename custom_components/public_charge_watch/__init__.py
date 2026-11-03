@@ -17,6 +17,8 @@ from .const import (
     CONF_API_KEY,
     CONF_COORDS,
     CONF_LOCATION_IDS,
+    CONF_LOOKUP_RADIUS,
+    DOTNL_LOCATION_RADIUS_M,
     CONF_SOURCE,
     DOMAIN,
     DYNAMIC_MOVE_M,
@@ -65,7 +67,10 @@ def get_client(hass: HomeAssistant, data: Mapping[str, Any]) -> Provider:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: NdwConfigEntry) -> bool:
-    coordinator = NdwCoordinator(hass, entry, get_client(hass, entry.data))
+    client = get_client(hass, entry.data)
+    if isinstance(client, NdwApi):
+        client.lookup_radius_m = entry.options.get(CONF_LOOKUP_RADIUS, DOTNL_LOCATION_RADIUS_M)
+    coordinator = NdwCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     labels = [

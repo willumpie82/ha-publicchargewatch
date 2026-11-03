@@ -67,7 +67,10 @@ from .const import (
     CONF_ONLY_AVAILABLE,
     CONF_POSTCODE,
     CONF_RADIUS,
+    CONF_LOOKUP_RADIUS,
     CONF_SCAN_INTERVAL,
+    DOTNL_LOCATION_RADIUS_M,
+    DOTNL_RADIUS_RANGE_M,
     CONF_SOURCE,
     CONF_TRACKED,
     CONF_ZONE,
@@ -85,6 +88,7 @@ from .const import (
 from .geocoding import async_geocode_postcode, async_reverse_city, normalize_postcode
 from .providers import PROVIDERS
 from .providers.base import ProviderAuthError
+from .providers.ndw_api import NdwApi
 
 _NETWORK_ERRORS = (aiohttp.ClientError, TimeoutError)
 
@@ -627,13 +631,28 @@ class NdwOptionsFlow(OptionsFlow):
         source = self.config_entry.data.get(CONF_SOURCE, SOURCE_NDW)
         default, minimum = PROVIDERS[source].scan_interval
         if user_input is not None:
-            return self.async_create_entry(
-                data={CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])}
-            )
+            data = {CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])}
+            if CONF_LOOKUP_RADIUS in user_input:
+                data[CONF_LOOKUP_RADIUS] = int(user_input[CONF_LOOKUP_RADIUS])
+            return self.async_create_entry(data=data)
         current = self.config_entry.options.get(CONF_SCAN_INTERVAL, default)
-        return self.async_show_form(
-            step_id="init", data_schema=_interval_schema(current, default, minimum)
-        )
+        schema = _interval_schema(current, default, minimum)
+        if source == NdwApi.provider_id:
+            radius = self.config_entry.options.get(CONF_LOOKUP_RADIUS, DOTNL_LOCATION_RADIUS_M)
+            schema = schema.extend(
+                {
+                    vol.Required(CONF_LOOKUP_RADIUS, default=radius): NumberSelector(
+                        NumberSelectorConfig(
+                            min=DOTNL_RADIUS_RANGE_M[0],
+                            max=DOTNL_RADIUS_RANGE_M[1],
+                            step=10,
+                            unit_of_measurement="m",
+                            mode=NumberSelectorMode.BOX,
+                        )
+                    )
+                }
+            )
+        return self.async_show_form(step_id="init", data_schema=schema)
 
 
 class LocationSubentryFlow(_LocationSearch, ConfigSubentryFlow):

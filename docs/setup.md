@@ -8,6 +8,10 @@
 entry) adds the charger to the place it is in, or creates that place. The town comes from OCM, or
 for NDW from the PDOK geocoder (the NDW feed has no town). Delete a charger's device to remove
 it from its place. The update interval is set per source (⋮ → Configure).
+For the NDW live API there is also a **lookup radius** (default 150 m): around each known charger
+NDW is asked for an area of that radius, and chargers that lie within it of each other share one
+request. A larger radius means fewer API calls but more data per call; in a dense city a small
+radius is enough, in a sparse area a larger one saves requests.
 
 ## Setup flow
 1. **Source**: NDW or OCM, with the pros and cons. OCM asks for its API key and checks it.

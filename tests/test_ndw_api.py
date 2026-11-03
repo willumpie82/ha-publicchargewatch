@@ -146,3 +146,29 @@ async def test_rate_limit_keeps_the_last_data_for_a_while(hass, mock_ndw_api, mo
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(sensor).state == "unavailable"
+
+
+async def test_lookup_radius_decides_how_many_requests_are_needed(hass, mock_ndw_api):
+    api = NdwApi(async_get_clientsession(hass), NdwTariffs(hass, async_get_clientsession(hass)))
+    coords = {"NL-NUO-near": (HOME_LAT, HOME_LON), "NL-NUO-two": (HOME_LAT + 0.002, HOME_LON)}  # 220 m
+    ids = set(coords)
+    await api.async_get_locations(ids, coords=coords)
+    assert len(mock_ndw_api.api_calls) == 2  # default 150 m: separate areas
+    mock_ndw_api.api_calls.clear()
+    api.lookup_radius_m = 300
+    found = await api.async_get_locations(ids, coords=coords)
+    assert set(found) == ids
+    assert len(mock_ndw_api.api_calls) == 1
+
+
+async def test_options_flow_offers_the_radius_for_the_api_source_only(hass, mock_ndw_api, mock_ndw):
+    await _add_ndw_location(hass, ["NL-NUO-near"], source="ndw_api")
+    entry = hass.config_entries.async_entries("public_charge_watch")[0]
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "lookup_radius" in result["data_schema"].schema
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"scan_interval": 300, "lookup_radius": 300}
+    )
+    assert entry.options["lookup_radius"] == 300
+    await hass.async_block_till_done()
+    assert hass.data["public_charge_watch"]["api"].lookup_radius_m == 300
