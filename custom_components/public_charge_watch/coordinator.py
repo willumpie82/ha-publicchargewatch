@@ -82,7 +82,8 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._client = client
         self._force = False
         self.last_success: datetime | None = None
-        self.rate_limited = False  # the last request was answered with a 429
+        self.failed: set[str] = set()  # locations whose last request was rate limited
+        self.location_success: dict[str, datetime] = {}  # last fresh data per location
         self.dynamic: dict[str, DynamicCoordinator] = {}  # by subentry id
 
     @property
@@ -98,18 +99,6 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         """Only NDW knows whether a charge point is free or in use."""
         return self._client.live_occupancy
 
-    def _keep_data_on_rate_limit(self, err: ProviderRateLimitError) -> dict[str, Any]:
-        """A rate limit is the source's doing: keep the last data for a while, not "unavailable"."""
-        self.rate_limited = True
-        if (
-            self.data is not None
-            and self.last_success is not None
-            and dt_util.utcnow() - self.last_success < _STALE_LIMIT * self.update_interval
-        ):
-            _LOGGER.debug("%s; keeping the previous data", err)
-            return self.data
-        raise UpdateFailed(f"Error fetching charger data: {err}") from err
-
     async def async_force_refresh(self) -> None:
         """Refresh now, bypassing the shared feed's minimum age (the refresh button)."""
         self._force = True
@@ -121,7 +110,7 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             self.last_success = dt_util.utcnow()
             return {}
         force, self._force = self._force, False
-        self.rate_limited = False
+        failed: set[str] = set()
         try:
             # reuse a recent download unless it is older than ~80% of our own interval
             locations = await self._client.async_get_locations(
@@ -129,16 +118,35 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 force=force,
                 max_age=0.8 * self.update_interval.total_seconds(),
                 coords=location_coords(self.config_entry),
+                failed=failed,
             )
         except ProviderAuthError as err:
             raise ConfigEntryAuthFailed(f"{self._client.name} rejected the credentials") from err
-        except ProviderRateLimitError as err:
-            return self._keep_data_on_rate_limit(err)
+        except ProviderRateLimitError:
+            locations, failed = {}, set(ids)
         except (aiohttp.ClientError, TimeoutError, ProviderError) as err:
             raise UpdateFailed(f"Error fetching charger data: {err}") from err
+        now = dt_util.utcnow()
+        self.failed = failed
+        for location_id in locations:
+            self.location_success[location_id] = now
+        # A rate limit is the source's doing: a location that could not be fetched keeps its
+        # last data for a while, and only then becomes "unavailable".
+        for location_id in failed:
+            last = self.location_success.get(location_id)
+            if (
+                last is not None
+                and self.data
+                and location_id in self.data
+                and now - last < _STALE_LIMIT * self.update_interval
+            ):
+                locations[location_id] = self.data[location_id]
         if not locations:
+            if failed:
+                raise UpdateFailed("Error fetching charger data: the source is rate limiting")
             raise UpdateFailed(f"No location found in {self.source} data")
-        self.last_success = dt_util.utcnow()
+        if len(failed) < len(ids):
+            self.last_success = now
         return locations  # a missing location only makes its own entities unavailable
 
 

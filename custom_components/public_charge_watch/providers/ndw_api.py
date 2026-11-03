@@ -185,6 +185,7 @@ class NdwApi(Provider):
         force: bool = False,  # noqa: ARG002
         max_age: float | None = None,  # noqa: ARG002
         coords: Mapping[str, tuple[float, float]] | None = None,
+        failed: set[str] | None = None,
     ) -> dict[str, dict[str, Any]]:
         """Known locations, found through small areas around their stored coordinates.
 
@@ -195,14 +196,22 @@ class NdwApi(Provider):
         found: dict[str, dict[str, Any]] = {}
         while remaining:
             pivot_id, (lat, lon) = next(iter(remaining.items()))
-            for loc in await self._fetch(bounding_box(lat, lon, self.lookup_radius_m)):
-                if loc["id"] in ids:
-                    found[loc["id"]] = loc
-            remaining = {
-                i: c
+            covered = {
+                i
                 for i, c in remaining.items()
-                if i != pivot_id and distance_m(lat, lon, *c) > self.lookup_radius_m
+                if i == pivot_id or distance_m(lat, lon, *c) <= self.lookup_radius_m
             }
+            try:
+                for loc in await self._fetch(bounding_box(lat, lon, self.lookup_radius_m)):
+                    if loc["id"] in ids:
+                        found[loc["id"]] = loc
+            except ProviderRateLimitError:
+                if failed is None:
+                    raise
+                failed.update(covered)  # the other areas may still work
+            remaining = {i: c for i, c in remaining.items() if i not in covered}
+        if failed is not None:
+            failed.difference_update(found)
         tariff_ids = {
             t for loc in found.values() for g in loc["groups"] for t in g["tariff_ids"]
         }

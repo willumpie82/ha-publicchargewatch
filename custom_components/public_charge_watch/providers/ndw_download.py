@@ -121,6 +121,7 @@ class NdwFeed(Provider):
         force: bool = False,
         max_age: float | None = None,
         coords: Mapping[str, tuple[float, float]] | None = None,  # noqa: ARG002
+        failed: set[str] | None = None,  # noqa: ARG002
     ) -> dict[str, dict[str, Any]]:
         """Current availability for the given location ids, with prices attached.
 

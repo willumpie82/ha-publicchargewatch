@@ -69,10 +69,13 @@ class Provider(ABC):
         force: bool = False,
         max_age: float | None = None,
         coords: Mapping[str, tuple[float, float]] | None = None,
+        failed: set[str] | None = None,
     ) -> dict[str, dict[str, Any]]:
         """Current state of known locations; force skips any shared-data reuse.
 
         coords (id -> latitude, longitude) is for sources that can only look up by area.
+        failed, when given, collects the ids that could not be fetched because of a rate limit,
+        instead of failing the whole call.
         """
 
     async def async_validate(self) -> None:

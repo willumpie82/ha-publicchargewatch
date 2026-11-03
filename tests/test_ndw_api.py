@@ -141,9 +141,9 @@ async def test_rate_limit_keeps_the_last_data_for_a_while(hass, mock_ndw_api, mo
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(sensor).state == "1"  # still the last known value, not unavailable
-    assert coordinator.rate_limited is True
+    assert coordinator.failed == {"NL-NUO-near"}
 
-    coordinator.last_success = dt_util.utcnow() - 4 * coordinator.update_interval  # too old now
+    coordinator.location_success["NL-NUO-near"] = dt_util.utcnow() - 4 * coordinator.update_interval  # too old now
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(sensor).state == "unavailable"
@@ -175,13 +175,37 @@ async def test_options_flow_offers_the_radius_for_the_api_source_only(hass, mock
     assert hass.data["public_charge_watch"]["api"].lookup_radius_m == 300
 
 
-async def test_rate_limited_diagnostic_sensor_follows_the_last_request(hass, mock_ndw_api):
+async def test_rate_limited_diagnostic_sensor_is_per_location(hass, mock_ndw_api):
     from homeassistant.helpers import entity_registry as er
 
     await _add_ndw_location(hass, ["NL-NUO-near"], source="ndw_api")
-    entry = hass.config_entries.async_entries("public_charge_watch")[0]
-    ent = er.async_get(hass).async_get_entity_id("binary_sensor", "public_charge_watch", f"{entry.entry_id}_rate_limited")
+    registry = er.async_get(hass)
+    ent = registry.async_get_entity_id("binary_sensor", "public_charge_watch", "NL-NUO-near_rate_limited")
     assert ent is not None
-    assert er.async_get(hass).async_get(ent).disabled_by is er.RegistryEntryDisabler.INTEGRATION
-    coordinator = entry.runtime_data
-    assert coordinator.rate_limited is False
+    assert registry.async_get(ent).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    entry = hass.config_entries.async_entries("public_charge_watch")[0]
+    assert entry.runtime_data.failed == set()
+
+
+async def test_only_the_rate_limited_area_fails(hass, mock_ndw_api, monkeypatch):
+    from custom_components.public_charge_watch.const import DOTNL_URL
+    from custom_components.public_charge_watch.providers import ndw_api as module
+    from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMockResponse
+
+    monkeypatch.setattr(module, "_RETRY_DELAY", 0)
+    api = NdwApi(async_get_clientsession(hass), NdwTariffs(hass, async_get_clientsession(hass)))
+    coords = {"NL-NUO-near": (HOME_LAT, HOME_LON), "NL-NUO-two": (HOME_LAT + 0.01, HOME_LON)}  # 1 km: two areas
+    calls = 0
+
+    async def second_area_is_limited(method, url, data):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            return AiohttpClientMockResponse(method, url, status=429)
+        return AiohttpClientMockResponse(method, url, json={"type": "FeatureCollection", "features": []})
+
+    mock_ndw_api.clear_requests()
+    mock_ndw_api.get(DOTNL_URL, side_effect=second_area_is_limited)
+    failed: set[str] = set()
+    await api.async_get_locations(set(coords), coords=coords, failed=failed)
+    assert failed == {"NL-NUO-two"}  # the first area answered
