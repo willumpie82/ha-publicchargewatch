@@ -82,11 +82,16 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._client = client
         self._force = False
         self.last_success: datetime | None = None
+        self.rate_limited = False  # the last request was answered with a 429
         self.dynamic: dict[str, DynamicCoordinator] = {}  # by subentry id
 
     @property
     def location_ids(self) -> set[str]:
         return {i for _, i in iter_locations(self.config_entry)}
+
+    @property
+    def can_be_rate_limited(self) -> bool:
+        return self._client.rate_limited
 
     @property
     def live_occupancy(self) -> bool:
@@ -95,6 +100,7 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     def _keep_data_on_rate_limit(self, err: ProviderRateLimitError) -> dict[str, Any]:
         """A rate limit is the source's doing: keep the last data for a while, not "unavailable"."""
+        self.rate_limited = True
         if (
             self.data is not None
             and self.last_success is not None
@@ -115,6 +121,7 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             self.last_success = dt_util.utcnow()
             return {}
         force, self._force = self._force, False
+        self.rate_limited = False
         try:
             # reuse a recent download unless it is older than ~80% of our own interval
             locations = await self._client.async_get_locations(

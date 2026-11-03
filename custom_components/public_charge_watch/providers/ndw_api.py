@@ -62,6 +62,7 @@ class NdwApi(Provider):
     name = "NDW (live API)"
     live_occupancy = True
     city_from_geocoder = True  # no town in the NDW data
+    rate_limited = True
     scan_interval = (300, 60)
 
     def __init__(self, session: aiohttp.ClientSession, tariffs: NdwTariffs) -> None:

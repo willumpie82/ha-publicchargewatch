@@ -191,6 +191,9 @@
     "binary_sensor": {
       "any_available": {
         "name": "Laadpunt beschikbaar"
+      },
+      "rate_limited": {
+        "name": "Rate limit bereikt"
       }
     },
     "button": {

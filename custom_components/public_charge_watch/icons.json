@@ -60,6 +60,12 @@
           "on": "mdi:ev-station",
           "off": "mdi:flash-off"
         }
+      },
+      "rate_limited": {
+        "default": "mdi:speedometer",
+        "state": {
+          "on": "mdi:speedometer-slow"
+        }
       }
     },
     "button": {

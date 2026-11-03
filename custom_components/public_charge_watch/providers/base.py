@@ -37,6 +37,7 @@ class Provider(ABC):
     name: ClassVar[str]
     live_occupancy: ClassVar[bool]  # knows free / in use, not just "working"
     needs_api_key: ClassVar[bool] = False
+    rate_limited: ClassVar[bool] = False  # may answer 429; shows a diagnostic sensor
     bulk_download: ClassVar[bool] = False  # works on a big shared file (a flow shows its download)
     city_from_geocoder: ClassVar[bool] = False  # locations carry no town: ask a geocoder
     scan_interval: ClassVar[tuple[int, int]]  # (default, minimum) in seconds

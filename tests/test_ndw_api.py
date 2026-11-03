@@ -141,6 +141,7 @@ async def test_rate_limit_keeps_the_last_data_for_a_while(hass, mock_ndw_api, mo
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert hass.states.get(sensor).state == "1"  # still the last known value, not unavailable
+    assert coordinator.rate_limited is True
 
     coordinator.last_success = dt_util.utcnow() - 4 * coordinator.update_interval  # too old now
     await coordinator.async_refresh()
@@ -172,3 +173,15 @@ async def test_options_flow_offers_the_radius_for_the_api_source_only(hass, mock
     assert entry.options["lookup_radius"] == 300
     await hass.async_block_till_done()
     assert hass.data["public_charge_watch"]["api"].lookup_radius_m == 300
+
+
+async def test_rate_limited_diagnostic_sensor_follows_the_last_request(hass, mock_ndw_api):
+    from homeassistant.helpers import entity_registry as er
+
+    await _add_ndw_location(hass, ["NL-NUO-near"], source="ndw_api")
+    entry = hass.config_entries.async_entries("public_charge_watch")[0]
+    ent = er.async_get(hass).async_get_entity_id("binary_sensor", "public_charge_watch", f"{entry.entry_id}_rate_limited")
+    assert ent is not None
+    assert er.async_get(hass).async_get(ent).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    coordinator = entry.runtime_data
+    assert coordinator.rate_limited is False

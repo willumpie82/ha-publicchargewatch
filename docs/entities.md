@@ -9,6 +9,8 @@ Created from the data the location actually has.
   binary sensor.
 - A diagnostic *Refresh* button checks for new data right now (bypasses the shared 60 s window;
   the ETag still skips the download when NDW's file is unchanged).
+- NDW live API: a diagnostic *Rate limited* binary sensor on the source's service device (hidden by default;
+  enable it under the device) is on when NDW answered the last request with 429 (too many requests).
 - NDW: an *Availability* event entity per location fires `became_available` (first free charge
   point) and `became_occupied` (last one taken), with `free`, `total` and `address` as attributes.
   Optionally gate it: on the place (⋮ → Reconfigure) pick a binary sensor or input boolean per
