@@ -45,23 +45,26 @@ def _setup_location(
     subentry_id: str,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    if location_id not in coordinator.data:
-        return  # not in the source's data right now; a reload picks it up later
-    async_add_entities(
-        [
-            NdwAvailableSensor(coordinator, location_id)
-            if coordinator.live_occupancy
-            else NdwOperationalSensor(coordinator, location_id),
-            NdwUpdatedSensor(coordinator, location_id),
-            NdwCheckedSensor(coordinator, location_id),
-        ],
-        config_subentry_id=subentry_id,
-    )
-
     known: set[str] = set()
+
+    def _add_main() -> None:
+        if "main" in known or location_id not in coordinator.data:
+            return
+        known.add("main")
+        async_add_entities(
+            [
+                NdwAvailableSensor(coordinator, location_id)
+                if coordinator.live_occupancy
+                else NdwOperationalSensor(coordinator, location_id),
+                NdwUpdatedSensor(coordinator, location_id),
+                NdwCheckedSensor(coordinator, location_id),
+            ],
+            config_subentry_id=subentry_id,
+        )
 
     def _add_new() -> None:
         """Create entities for data that appeared (also called once at setup)."""
+        _add_main()
         data = coordinator.data.get(location_id)
         if data is None:
             return

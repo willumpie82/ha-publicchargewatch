@@ -8,8 +8,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import NdwConfigEntry
-from .coordinator import DynamicCoordinator, NdwCoordinator, iter_locations
-from .entity import DynamicEntity, NdwLocationEntity
+from .coordinator import DynamicCoordinator, NdwCoordinator
+from .entity import DynamicEntity, NdwLocationEntity, add_location_entities
 
 
 async def async_setup_entry(
@@ -21,12 +21,12 @@ async def async_setup_entry(
             [NdwNearestRefreshButton(dynamic, subentry_id, coordinator)],
             config_subentry_id=subentry_id,
         )
-    for subentry_id, location_id in iter_locations(entry):
-        if location_id in coordinator.data:
-            async_add_entities(
-                [NdwRefreshButton(coordinator, location_id)],
-                config_subentry_id=subentry_id,
-            )
+    add_location_entities(
+        entry,
+        coordinator,
+        async_add_entities,
+        lambda _subentry_id, location_id: [NdwRefreshButton(coordinator, location_id)],
+    )
 
 
 class NdwRefreshButton(NdwLocationEntity, ButtonEntity):

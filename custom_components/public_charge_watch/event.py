@@ -8,8 +8,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import NdwConfigEntry
 from .const import CONF_NOTIFY
-from .coordinator import DynamicCoordinator, NdwCoordinator, iter_locations
-from .entity import DynamicEntity, NdwLocationEntity
+from .coordinator import DynamicCoordinator, NdwCoordinator
+from .entity import DynamicEntity, NdwLocationEntity, add_location_entities
 
 BECAME_AVAILABLE = "became_available"
 BECAME_OCCUPIED = "became_occupied"
@@ -25,13 +25,12 @@ async def async_setup_entry(
         )
     if not coordinator.live_occupancy:
         return
-    for subentry_id, location_id in iter_locations(entry):
-        if location_id in coordinator.data:
-            gate = entry.subentries[subentry_id].data.get(CONF_NOTIFY, {}).get(location_id)
-            async_add_entities(
-                [NdwAvailabilityEvent(coordinator, location_id, gate)],
-                config_subentry_id=subentry_id,
-            )
+
+    def build(subentry_id: str, location_id: str) -> list[NdwAvailabilityEvent]:
+        gate = entry.subentries[subentry_id].data.get(CONF_NOTIFY, {}).get(location_id)
+        return [NdwAvailabilityEvent(coordinator, location_id, gate)]
+
+    add_location_entities(entry, coordinator, async_add_entities, build)
 
 
 class NdwAvailabilityEvent(NdwLocationEntity, EventEntity):

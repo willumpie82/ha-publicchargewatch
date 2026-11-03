@@ -2,13 +2,41 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import DynamicCoordinator, NdwCoordinator
+from .coordinator import DynamicCoordinator, NdwCoordinator, iter_locations
+
+
+def add_location_entities(
+    entry: ConfigEntry,
+    coordinator: NdwCoordinator,
+    async_add_entities: AddEntitiesCallback,
+    build: Callable[[str, str], list[Entity]],
+) -> None:
+    """Add build(subentry_id, location_id) for every location, as soon as its data is there.
+
+    A location can be missing at startup (for instance one area was rate limited): its
+    entities then appear with a later update, not only after a reload.
+    """
+    added: set[str] = set()
+
+    def _add_new() -> None:
+        for subentry_id, location_id in iter_locations(entry):
+            if location_id in added or location_id not in coordinator.data:
+                continue
+            added.add(location_id)
+            async_add_entities(build(subentry_id, location_id), config_subentry_id=subentry_id)
+
+    _add_new()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new))
 
 
 class NdwLocationEntity(CoordinatorEntity[NdwCoordinator]):

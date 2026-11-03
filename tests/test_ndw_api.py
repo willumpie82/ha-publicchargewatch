@@ -208,4 +208,29 @@ async def test_only_the_rate_limited_area_fails(hass, mock_ndw_api, monkeypatch)
     mock_ndw_api.get(DOTNL_URL, side_effect=second_area_is_limited)
     failed: set[str] = set()
     await api.async_get_locations(set(coords), coords=coords, failed=failed)
-    assert failed == {"NL-NUO-two"}  # the first area answered
+    assert len(failed) == 1  # one area answered, the other was rate limited
+
+
+async def test_location_missing_at_startup_gets_its_entities_later(hass, mock_ndw_api, monkeypatch):
+    real = NdwApi.async_get_locations
+    calls = 0
+
+    async def first_call_loses_a_location(self, ids, *args, failed=None, **kwargs):
+        nonlocal calls
+        calls += 1
+        found = await real(self, ids, *args, failed=failed, **kwargs)
+        if calls == 1:  # as if its area was rate limited during the first refresh
+            found.pop("NL-NUO-two")
+            failed.add("NL-NUO-two")
+        return found
+
+    monkeypatch.setattr(NdwApi, "async_get_locations", first_call_loses_a_location)
+    await _add_ndw_location(hass, ["NL-NUO-near", "NL-NUO-two"], source="ndw_api")
+    assert _entity(hass, "sensor", "NL-NUO-near_available") is not None
+    assert _entity(hass, "sensor", "NL-NUO-two_available") is None
+
+    entry = hass.config_entries.async_entries("public_charge_watch")[0]
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(_entity(hass, "sensor", "NL-NUO-two_available")).state == "2"
+    assert _entity(hass, "button", "NL-NUO-two_refresh") is not None

@@ -13,8 +13,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import NdwConfigEntry
 from .const import DOMAIN
-from .coordinator import NdwCoordinator, iter_locations
-from .entity import NdwLocationEntity
+from .coordinator import NdwCoordinator
+from .entity import NdwLocationEntity, add_location_entities
 
 
 async def async_setup_entry(
@@ -22,15 +22,16 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data
     _remove_source_sensor(hass, entry)
-    for subentry_id, location_id in iter_locations(entry):
-        if location_id not in coordinator.data:
-            continue
+
+    def build(_subentry_id: str, location_id: str) -> list[NdwLocationEntity]:
         entities: list[NdwLocationEntity] = []
         if coordinator.live_occupancy:
             entities.append(NdwAnyAvailableBinarySensor(coordinator, location_id))
         if coordinator.can_be_rate_limited:
             entities.append(NdwRateLimitedBinarySensor(coordinator, location_id))
-        async_add_entities(entities, config_subentry_id=subentry_id)
+        return entities
+
+    add_location_entities(entry, coordinator, async_add_entities, build)
 
 
 def _remove_source_sensor(hass: HomeAssistant, entry: NdwConfigEntry) -> None:
