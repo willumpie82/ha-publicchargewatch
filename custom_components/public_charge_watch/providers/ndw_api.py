@@ -118,8 +118,15 @@ class NdwApi(Provider):
                 ) as resp:
                     if resp.status == 429:
                         retry_after = _retry_after(resp.headers.get("Retry-After"))
+                        hints = {
+                            k: v
+                            for k, v in resp.headers.items()
+                            if "limit" in k.lower() or "retry" in k.lower() or "remaining" in k.lower()
+                        }
+                        text = (await resp.text())[:200].strip()  # may name the window
                         raise ProviderRateLimitError(
-                            f"NDW API rate limit (Retry-After: {retry_after})", retry_after
+                            f"NDW API rate limit (Retry-After: {retry_after}, headers: {hints}, body: {text!r})",
+                            retry_after,
                         )
                     resp.raise_for_status()
                     body = await resp.read()
