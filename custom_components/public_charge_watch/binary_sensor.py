@@ -41,8 +41,10 @@ def _remove_source_sensor(hass: HomeAssistant, entry: NdwConfigEntry) -> None:
     ):
         registry.async_remove(entity_id)
     devices = dr.async_get(hass)
-    if device := devices.async_get_device(identifiers={(DOMAIN, f"source_{entry.entry_id}")}):
-        devices.async_remove_device(device.id)
+    source = (DOMAIN, f"source_{entry.entry_id}")
+    for device in dr.async_entries_for_config_entry(devices, entry.entry_id):
+        if source in device.identifiers:
+            devices.async_remove_device(device.id)
 
 
 class NdwAnyAvailableBinarySensor(NdwLocationEntity, BinarySensorEntity):
