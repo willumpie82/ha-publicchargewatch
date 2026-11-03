@@ -193,7 +193,7 @@
         "name": "Charge point available"
       },
       "rate_limited": {
-        "name": "Rate limited"
+        "name": "Rate limit"
       }
     },
     "button": {

@@ -193,7 +193,7 @@
         "name": "Laadpunt beschikbaar"
       },
       "rate_limited": {
-        "name": "Rate limit bereikt"
+        "name": "Rate limit"
       }
     },
     "button": {

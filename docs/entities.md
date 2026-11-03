@@ -9,7 +9,7 @@ Created from the data the location actually has.
   binary sensor.
 - A diagnostic *Refresh* button checks for new data right now (bypasses the shared 60 s window;
   the ETag still skips the download when NDW's file is unchanged).
-- NDW live API: a diagnostic *Rate limited* binary sensor per charging location (hidden by default; enable it
+- NDW live API: a diagnostic *Rate limit* binary sensor per charging location (hidden by default; enable it
   on the device) is on when NDW answered the last request for that location with 429 (too many
   requests). Locations in different areas fail independently, and a location keeps its last data
   for up to 3 update intervals before its entities go unavailable; this sensor tells you why.
