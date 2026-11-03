@@ -30,9 +30,15 @@ from .const import (
     SUBENTRY_LOCATION,
 )
 from .dynamic_location import pick
-from .providers.base import Provider, ProviderAuthError, ProviderError
+from .providers.base import (
+    Provider,
+    ProviderAuthError,
+    ProviderError,
+    ProviderRateLimitError,
+)
 
 _LOGGER = logging.getLogger(__name__)
+_STALE_LIMIT = 3  # update intervals the last data is kept while the source rate-limits us
 
 
 def location_coords(entry: ConfigEntry) -> dict[str, tuple[float, float]]:
@@ -87,6 +93,17 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         """Only NDW knows whether a charge point is free or in use."""
         return self._client.live_occupancy
 
+    def _keep_data_on_rate_limit(self, err: ProviderRateLimitError) -> dict[str, Any]:
+        """A rate limit is the source's doing: keep the last data for a while, not "unavailable"."""
+        if (
+            self.data is not None
+            and self.last_success is not None
+            and dt_util.utcnow() - self.last_success < _STALE_LIMIT * self.update_interval
+        ):
+            _LOGGER.debug("%s; keeping the previous data", err)
+            return self.data
+        raise UpdateFailed(f"Error fetching charger data: {err}") from err
+
     async def async_force_refresh(self) -> None:
         """Refresh now, bypassing the shared feed's minimum age (the refresh button)."""
         self._force = True
@@ -108,6 +125,8 @@ class NdwCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             )
         except ProviderAuthError as err:
             raise ConfigEntryAuthFailed(f"{self._client.name} rejected the credentials") from err
+        except ProviderRateLimitError as err:
+            return self._keep_data_on_rate_limit(err)
         except (aiohttp.ClientError, TimeoutError, ProviderError) as err:
             raise UpdateFailed(f"Error fetching charger data: {err}") from err
         if not locations:
@@ -154,6 +173,7 @@ class DynamicCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._client = client
         self.position: tuple[float, float] | None = None  # where the data was computed
         self._force = False
+        self.last_success: datetime | None = None
 
     @property
     def tracked_entity(self) -> str:
@@ -177,8 +197,18 @@ class DynamicCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data[CONF_RADIUS],
                 max_age=0 if force else 0.8 * self.update_interval.total_seconds(),
             )
+        except ProviderRateLimitError as err:
+            if (
+                self.data is not None
+                and self.last_success is not None
+                and dt_util.utcnow() - self.last_success < _STALE_LIMIT * self.update_interval
+            ):
+                _LOGGER.debug("%s; keeping the previous data", err)
+                return self.data
+            raise UpdateFailed(f"Error fetching charger data: {err}") from err
         except (aiohttp.ClientError, TimeoutError, ProviderError) as err:
             raise UpdateFailed(f"Error fetching charger data: {err}") from err
+        self.last_success = dt_util.utcnow()
         return {
             "position": position,
             "results": pick(

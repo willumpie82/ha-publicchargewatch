@@ -8,7 +8,7 @@ Public EV chargers as Home Assistant devices, from one of two sources chosen in 
 | Price | exact tariff incl. VAT | exact tariff incl. VAT | best-effort parse of free text |
 | Account | none | none | free API key ([get one](https://openchargemap.org/site/develop/api)) |
 | Data traffic | a few kB per refresh (+ ~4 MB tariffs once a day) | ~5 MB per refresh (up to ~1.4 GB/day at 5 min) | a few kB |
-| Default refresh | 2 min (min 30 s) | 5 min (min 2 min) | 30 min (min 5 min) |
+| Default refresh | 5 min (min 1 min) | 5 min (min 2 min) | 30 min (min 5 min) |
 | Data quality | from the operators (CPO), minutes old | same | community, often months old |
 
 The two NDW sources are the same data. The **live API** asks NDW only for the areas around your

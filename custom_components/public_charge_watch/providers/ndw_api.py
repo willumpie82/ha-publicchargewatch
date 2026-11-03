@@ -34,6 +34,8 @@ _LOGGER = logging.getLogger(__name__)
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
 _METERS_PER_DEGREE = 111_320
 _MAX_PAGES = 20  # of 1000 locations: far more than any search area holds
+_RETRY_DELAY = 2.0  # seconds to wait before the one retry after a 429 without Retry-After
+_MAX_RETRY_WAIT = 10.0
 _NEXT_LINK = re.compile(r'<([^>]+)>\s*;\s*rel="next"')
 
 
@@ -60,7 +62,7 @@ class NdwApi(Provider):
     name = "NDW (live API)"
     live_occupancy = True
     city_from_geocoder = True  # no town in the NDW data
-    scan_interval = (120, 30)
+    scan_interval = (300, 60)
 
     def __init__(self, session: aiohttp.ClientSession, tariffs: NdwTariffs) -> None:
         self._session = session
@@ -92,7 +94,17 @@ class NdwApi(Provider):
     async def _fetch_page(
         self, bbox: str, cursor: str | None
     ) -> tuple[list[dict[str, Any]], str | None, int | None]:
-        """One page: (features, cursor of the next page, total count)."""
+        """One page; a rate-limited request is tried once more after a short wait."""
+        try:
+            return await self._request_page(bbox, cursor)
+        except ProviderRateLimitError as err:
+            await asyncio.sleep(min(err.retry_after or _RETRY_DELAY, _MAX_RETRY_WAIT))
+            return await self._request_page(bbox, cursor)
+
+    async def _request_page(
+        self, bbox: str, cursor: str | None
+    ) -> tuple[list[dict[str, Any]], str | None, int | None]:
+        """One request: (features, cursor of the next page, total count)."""
         params = {"bbox": bbox}
         if cursor:
             params["cursor"] = cursor
@@ -105,8 +117,9 @@ class NdwApi(Provider):
                     DOTNL_URL, params=params, timeout=_TIMEOUT
                 ) as resp:
                     if resp.status == 429:
+                        retry_after = _retry_after(resp.headers.get("Retry-After"))
                         raise ProviderRateLimitError(
-                            "NDW API rate limit", _retry_after(resp.headers.get("Retry-After"))
+                            f"NDW API rate limit (Retry-After: {retry_after})", retry_after
                         )
                     resp.raise_for_status()
                     body = await resp.read()

@@ -89,3 +89,60 @@ async def test_incomplete_answer_is_an_error(hass, mock_ndw_api):
     api = NdwApi(async_get_clientsession(hass), NdwTariffs(hass, async_get_clientsession(hass)))
     with pytest.raises(ProviderError):
         await api.async_nearby(HOME_LAT, HOME_LON, 200)
+
+
+async def test_one_rate_limited_request_is_retried(hass, mock_ndw_api, monkeypatch):
+    from custom_components.public_charge_watch.providers import ndw_api as module
+
+    monkeypatch.setattr(module, "_RETRY_DELAY", 0)
+    from custom_components.public_charge_watch.const import DOTNL_URL
+    from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMockResponse
+    import json
+
+    calls = {"n": 0}
+
+    async def flaky(method, url, data):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return AiohttpClientMockResponse(method, url, status=429)
+        return AiohttpClientMockResponse(
+            method, url, response=json.dumps({"features": []}).encode(), headers={"x-total-count": "0"}
+        )
+
+    mock_ndw_api.clear_requests()
+    mock_ndw_api.get(DOTNL_URL, side_effect=flaky)
+    api = NdwApi(async_get_clientsession(hass), NdwTariffs(hass, async_get_clientsession(hass)))
+    assert await api.async_nearby(HOME_LAT, HOME_LON, 200) == []
+    assert calls["n"] == 2  # 429, then the retry
+
+
+async def test_rate_limit_keeps_the_last_data_for_a_while(hass, mock_ndw_api, monkeypatch):
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.public_charge_watch.const import DOTNL_URL
+    from custom_components.public_charge_watch.providers import ndw_api as module
+    from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMockResponse
+
+    monkeypatch.setattr(module, "_RETRY_DELAY", 0)
+    await _add_ndw_location(hass, ["NL-NUO-near"], source="ndw_api")
+    entry = hass.config_entries.async_entries("public_charge_watch")[0]
+    coordinator = entry.runtime_data
+    sensor = _entity(hass, "sensor", "NL-NUO-near_available")
+    assert hass.states.get(sensor).state == "1"
+
+    async def limited(method, url, data):
+        return AiohttpClientMockResponse(method, url, status=429)
+
+    mock_ndw_api.clear_requests()
+    mock_ndw_api.get(DOTNL_URL, side_effect=limited)
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(sensor).state == "1"  # still the last known value, not unavailable
+
+    coordinator.last_success = dt_util.utcnow() - 4 * coordinator.update_interval  # too old now
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(sensor).state == "unavailable"
