@@ -295,7 +295,7 @@ class NdwCheckedSensor(NdwLocationEntity, SensorEntity):
 
     @property
     def native_value(self) -> datetime | None:
-        return self.coordinator.last_success
+        return self.coordinator.location_success.get(self.location_id)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
