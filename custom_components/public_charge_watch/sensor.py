@@ -94,6 +94,15 @@ def _setup_location(
     entry.async_on_unload(coordinator.async_add_listener(_add_new))
 
 
+def _last_checked(coordinator: NdwCoordinator, location_id: str) -> dict[str, Any]:
+    """Changes with every fresh fetch, so the state's "last updated" is the age of the data.
+
+    A dashboard row can then show it as secondary info (`last-updated`).
+    """
+    checked = coordinator.location_success.get(location_id)
+    return {"last_checked": checked.isoformat() if checked else None}
+
+
 def _location_attributes(loc: dict[str, Any]) -> dict[str, Any]:
     return {
         "total_points": loc.get("points") or len(loc.get("evses", [])),
@@ -109,6 +118,8 @@ def _location_attributes(loc: dict[str, Any]) -> dict[str, Any]:
 class NdwAvailableSensor(NdwLocationEntity, SensorEntity):
     """NDW: number of free charge points at the location."""
 
+    _unrecorded_attributes = frozenset({"last_checked"})  # one new attribute row per refresh otherwise
+
     _attr_translation_key = "available_points"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -122,7 +133,7 @@ class NdwAvailableSensor(NdwLocationEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return _location_attributes(self.location)
+        return _location_attributes(self.location) | _last_checked(self.coordinator, self.location_id)
 
 
 class NdwGroupSensor(NdwLocationEntity, SensorEntity):
@@ -166,6 +177,8 @@ class NdwGroupSensor(NdwLocationEntity, SensorEntity):
 class NdwOperationalSensor(NdwLocationEntity, SensorEntity):
     """OCM: connections believed to work. Says nothing about occupancy."""
 
+    _unrecorded_attributes = frozenset({"last_checked"})
+
     _attr_translation_key = "operational_points"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -183,7 +196,7 @@ class NdwOperationalSensor(NdwLocationEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return _location_attributes(self.location)
+        return _location_attributes(self.location) | _last_checked(self.coordinator, self.location_id)
 
 
 class NdwEvseStatusSensor(NdwEvseEntity, SensorEntity):

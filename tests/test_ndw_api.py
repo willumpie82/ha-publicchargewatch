@@ -234,3 +234,16 @@ async def test_location_missing_at_startup_gets_its_entities_later(hass, mock_nd
     await hass.async_block_till_done()
     assert hass.states.get(_entity(hass, "sensor", "NL-NUO-two_available")).state == "2"
     assert _entity(hass, "button", "NL-NUO-two_refresh") is not None
+
+
+async def test_available_sensor_state_is_rewritten_with_every_fresh_fetch(hass, mock_ndw_api):
+    await _add_ndw_location(hass, ["NL-NUO-near"], source="ndw_api")
+    entity = _entity(hass, "sensor", "NL-NUO-near_available")
+    first = hass.states.get(entity)
+    assert first.attributes["last_checked"]
+    entry = hass.config_entries.async_entries("public_charge_watch")[0]
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    second = hass.states.get(entity)
+    assert second.attributes["last_checked"] != first.attributes["last_checked"]
+    assert second.last_updated > first.last_updated  # what a dashboard shows as the age
